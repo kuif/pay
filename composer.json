@@ -1,0 +1,19 @@
+{
+    "name": "fengkui/pay",
+    "description": "支付",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "fengkui",
+            "email": "1161634940@qq.com"
+        }
+    ],
+    "require": {
+        "fengkui/supports": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "fengkui\\": "src"
+        }
+    }
+}
