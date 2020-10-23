@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2020-10-22T18:35:24+08:00
+ * @Last Modified time: 2020-10-23T14:21:38+08:00
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -12,12 +12,16 @@ ini_set('display_errors', '1');
 // 定义时区
 ini_set('date.timezone','Asia/Shanghai');
 
+use fengkui\Supports\Http;
+
+/**
+ * Wechat 微信支付
+ */
 class Wechat
 {
-    // 定义相关配置项
-    private static $sslcert_path = './cert/apiclient_cert.pem'; // 证书（退款时使用）
-    private static $sslkey_path = './cert/apiclient_key.pem'; // 证书（退款时使用）
+    // 当前请求的 Host: 头部的内容
     private static $referer = '';
+    // 支付完整配置
     private static $config = array(
         'appid'         => '', // 微信支付appid
         'xcxappid'      => '', // 微信小程序appid
@@ -26,6 +30,8 @@ class Wechat
         'appsecret'     => '', // 公众帐号secert(公众号支付专用)
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
         'redirect_uri'  => '', // 公众号支付时，没有code，获取openid使用
+        'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
+        'cert_key'      => './cert/apiclient_key.pem', // 证书（退款，红包时使用）
     );
 
     /**
@@ -67,19 +73,19 @@ class Wechat
         $xml = self::array_to_xml($data);
         $url = 'https://api.mch.weixin.qq.com/pay/unifiedorder';//接收xml数据的文件
         $header[] = "Content-type: text/xml";//定义content-type为xml,注意是数组
-        $ch = curl_init ($url);
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 兼容本地没有指定curl.cainfo路径的错误
-        curl_setopt($ch, CURLOPT_REFERER, self::$referer); //设置 referer
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $xml);
-        $response = curl_exec($ch);
-        if(curl_errno($ch)){
-            die(curl_error($ch)); // 显示报错信息；终止继续执行
+        $ci = curl_init ($url);
+        curl_setopt($ci, CURLOPT_URL, $url);
+        curl_setopt($ci, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ci, CURLOPT_SSL_VERIFYPEER, false); // 兼容本地没有指定curl.cainfo路径的错误
+        curl_setopt($ci, CURLOPT_REFERER, self::$referer); //设置 referer
+        curl_setopt($ci, CURLOPT_HTTPHEADER, $header);
+        curl_setopt($ci, CURLOPT_POST, 1);
+        curl_setopt($ci, CURLOPT_POSTFIELDS, $xml);
+        $response = curl_exec($ci);
+        if(curl_errno($ci)){
+            die(curl_error($ci)); // 显示报错信息；终止继续执行
         }
-        curl_close($ch);
+        curl_close($ci);
         $result = self::xml_to_array($response);
         if ($result['return_code']=='FAIL')
             die($result['return_msg']); // 显示错误信息
@@ -135,18 +141,26 @@ class Wechat
             return $data;
         }
         empty($code) && $code = $_GET['code'];
+        $params = ['appid' => $config['appid']];
         // 如果没有get参数没有code；则重定向去获取openid；
         if (empty($code)) {
-            $out_trade_no = $order['out_trade_no']; // 获取订单号
-            $redirect_uri = $config['redirect_uri']; // 返回的url
-            $redirect_uri = urlencode($redirect_uri);
-            $url = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid='.$config['appid'].'&redirect_uri='.$redirect_uri.'&response_type=code&scope=snsapi_base&state='.$out_trade_no.'#wechat_redirect';
+            $params['redirect_uri'] = urlencode($config['redirect_uri']); // 返回的url
+            $params['response_type'] = 'code';
+            $params['scope'] = 'snsapi_base';
+            $params['state'] = $order['out_trade_no']; // 获取订单号
+
+            $url = 'https://open.weixin.qq.com/connect/oauth2/authorize?'. http_build_query($params) .'#wechat_redirect';
             header('Location: '.$url);
         } else {
-            // 组合获取prepay_id的url
-            $url = 'https://api.weixin.qq.com/sns/oauth2/access_token?appid='.$config['appid'].'&secret='.$config['appsecret'].'&code='.$code.'&grant_type=authorization_code';
-            $result = self::curl_get_contents($url); // curl获取prepay_id
-            $result = json_decode($result,true);
+            $params['secret'] = $config['appsecret'];
+            $params['code'] = $code;
+            $params['grant_type'] = 'authorization_code';
+
+            // 通过code获取access_token
+            $url = 'https://api.weixin.qq.com/sns/oauth2/access_token';
+            $response = Http::get($url, $params); // 进行GET请求
+
+            $result = json_decode($response, true);
             $order['openid'] = $result['openid']; // 获取到的openid
             $data = self::xcxPay($order, false); // 获取支付相关信息(获取非小程序信息)
             return $data;
@@ -247,7 +261,11 @@ class Wechat
         $data['sign'] = $sign;
         $xml = self::array_to_xml($data);
         $url = 'https://api.mch.weixin.qq.com/secapi/pay/refund';//接收xml数据的文件
-        $response = self::postXmlSSLCurl($xml,$url);
+        $cert = [
+            'cert' => $config['cert_client'],
+            'key' => $config['cert_key'],
+        ];
+        $response = Http::post($url, $xml, ['Content-type: text/xml'], $cert);
         $result = self::xml_to_array($response);
         // 显示错误信息
         if ($result['return_code']=='FAIL') {
@@ -354,72 +372,6 @@ class Wechat
         }
         $xml .= "</xml>";
         return $xml;
-    }
-
-    /**
-     * [curl_get_contents get请求]
-     * @param  [type] $url [请求地址]
-     * @return [type]      [description]
-     */
-    public static function curl_get_contents($url)
-    {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);                //设置访问的url地址
-        // curl_setopt($ch,CURLOPT_HEADER,1);               //是否显示头部信息
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);               //设置超时
-        curl_setopt($ch, CURLOPT_USERAGENT, $_SERVER['HTTP_USER_AGENT']);   //用户访问代理 User-Agent
-        curl_setopt($ch, CURLOPT_REFERER, self::$referer);        //设置 referer
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);        //跟踪301
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);        //返回结果
-        $r=curl_exec($ch);
-        curl_close($ch);
-        return $r;
-    }
-
-    /**
-     * [postXmlSSLCurl 需要使用证书的请求]
-     * @param  [type]  $xml    [xml数据]
-     * @param  [type]  $url    [post请求地址]
-     * @param  integer $second [description]
-     * @return [type]          [description]
-     */
-    public static function postXmlSSLCurl($xml,$url,$second=30)
-    {
-        $ch = curl_init();
-        //超时时间
-        curl_setopt($ch,CURLOPT_TIMEOUT,$second);
-        //这里设置代理，如果有的话
-        //curl_setopt($ch,CURLOPT_PROXY, '8.8.8.8');
-        //curl_setopt($ch,CURLOPT_PROXYPORT, 8080);
-        curl_setopt($ch,CURLOPT_URL, $url);
-        curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,FALSE);
-        curl_setopt($ch,CURLOPT_SSL_VERIFYHOST,FALSE);
-        //设置header
-        curl_setopt($ch,CURLOPT_HEADER,FALSE);
-        //要求结果为字符串且输出到屏幕上
-        curl_setopt($ch,CURLOPT_RETURNTRANSFER,TRUE);
-        //设置证书
-        //使用证书：cert 与 key 分别属于两个.pem文件
-        //默认格式为PEM，可以注释
-        curl_setopt($ch,CURLOPT_SSLCERTTYPE,'PEM');
-        curl_setopt($ch,CURLOPT_SSLCERT, self::$sslcert_path);
-        //默认格式为PEM，可以注释
-        curl_setopt($ch,CURLOPT_SSLKEYTYPE,'PEM');
-        curl_setopt($ch,CURLOPT_SSLKEY, self::$sslkey_path);
-        //post提交方式
-        curl_setopt($ch,CURLOPT_POST, true);
-        curl_setopt($ch,CURLOPT_POSTFIELDS,$xml);
-        $data = curl_exec($ch);
-        //返回结果
-        if($data){
-            curl_close($ch);
-            return $data;
-        } else {
-            $error = curl_errno($ch);
-            echo "curl出错，错误码:$error"."<br>";
-            curl_close($ch);
-            return false;
-        }
     }
 
     /** fengkui.net

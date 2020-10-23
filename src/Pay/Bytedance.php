@@ -3,14 +3,19 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2020-10-22T18:39:20+08:00
+ * @Last Modified time: 2020-10-23T14:12:28+08:00
  */
 namespace fengkui\Pay;
 
 use Yansongda\Pay\Pay;
+use fengkui\Supports\Http;
 
+/**
+ * Bytedance 字节跳动支付
+ */
 class Bytedance
 {
+    // 支付相关配置
     private static $config = array(
         'mch_id'    => '', // 商户号
         'app_id'    => '', // App ID
@@ -55,7 +60,7 @@ class Bytedance
             "payment_type"  => "direct",
             "total_amount"  => $order['total_amount'],
             "trade_type"    => "H5",
-            "uid"           => self::getNonceStr(),
+            "uid"           => self::get_rand_str(),
             "version"       => "2.0",
             "currency"      => "CNY",
             "subject"       => $order['body'],
@@ -116,50 +121,17 @@ class Bytedance
     }
 
     /**
-     * [getNonceStr 产生随机字符串，不长于32位]
+     * [get_rand_str 产生随机字符串，不长于32位]
      * @param  integer $length [长度]
      * @return [type]          [description]
      */
-    protected static function getNonceStr($length = 32) {
+    protected static function get_rand_str($length = 32) {
         $chars = "abcdefghijklmnopqrstuvwxyz0123456789";
         $str ="";
         for ( $i = 0; $i < $length; $i++ )  {
             $str .= substr($chars, mt_rand(0, strlen($chars)-1), 1);
         }
         return $str;
-    }
-
-    /**
-     * [antidirt 检测文本是否包含违规内容]
-     * @param  string $text [description]
-     * @return [type]       [description]
-     */
-    public static function antidirt($text='')
-    {
-        if (!$text)
-            die('请输入要筛选的词');
-
-        $appid = 'ttd32da5904c07a571';
-        $secret = 'd22ca6e01cc7f95cb8b015581e58f111337818bb';
-        $antidirtUrl = 'https://developer.toutiao.com/api/v2/tags/text/antidirt';
-        $tokenUrl = 'https://developer.toutiao.com/api/apps/token?appid='.$appid.'&secret'.$secret.'=&grant_type=client_credential';
-
-        $data = httpRequest($tokenUrl, 'GET');
-        if (!$data)
-            die('access_token获取失败');
-
-        $data = json_decode($data,TRUE);
-        $access_token = $data['access_token'];
-        $contentbody = '{"tasks": [{"content": "'.$text.'"}]}';
-        $re = httpRequest($antidirtUrl, 'POST',$contentbody, ['X-Token: '.$access_token]);
-        $re = json_decode($re, TRUE);
-
-        if ($re['data'][0]['predicts'][0]['hit']) {
-            die('包含违规内容，请更换');
-            return true;
-        } else {
-            return true;
-        }
     }
 
     /** fengkui.net

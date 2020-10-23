@@ -3,12 +3,18 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-09-27T16:28:31+08:00
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2020-10-22T18:35:32+08:00
+ * @Last Modified time: 2020-10-23T14:08:57+08:00
  */
 namespace fengkui\Pay;
 
+use fengkui\Supports\Http;
+
+/**
+ * Baidu 百度支付
+ */
 class Baidu
 {
+    // 支付相关配置
     private static $config = array(
         'deal_id'       => '', // 百度收银台的财务结算凭证
         'app_key'       => '', // 表示应用身份的唯一ID
@@ -107,7 +113,7 @@ class Baidu
     {
         $config = self::$config;
 
-        $data = array(
+        $params = array(
             'access_token'      => $order['access_token'], // 获取开发者服务权限说明
             'applyRefundMoney'  => $order['total_amount'], // 退款金额，单位：分。
             'bizRefundBatchId'  => $order['order_sn'], // 开发者退款批次
@@ -119,10 +125,8 @@ class Baidu
             'userId'            => $order['user_id'], // 百度收银台用户 id
         );
 
-        $array = ['errno'=>0, 'msg'=>'success', 'data'=> ['isConsumed'=>2] ];
-
         $url = 'https://openapi.baidu.com/rest/2.0/smartapp/pay/paymentservice/applyOrderRefund';
-        $response = self::post_curl($url, $data);
+        $response = Http::post($url, $params);
         $result = json_decode($response, true);
         // // 显示错误信息
         // if ($result['msg']!='success') {
@@ -182,27 +186,20 @@ class Baidu
         if (empty($rsaPriKeyStr) || empty($assocArr)) {
             return $sign;
         }
-
         if (!function_exists('openssl_pkey_get_private') || !function_exists('openssl_sign')) {
             throw new Exception("openssl扩展不存在");
         }
-
         $rsaPriKeyPem = self::convertRSAKeyStr2Pem($rsaPriKeyStr, 1);
-
         $priKey = openssl_pkey_get_private($rsaPriKeyPem);
-
         if (isset($assocArr['sign'])) {
             unset($assocArr['sign']);
         }
-
         ksort($assocArr); // 参数按字典顺序排序
-
         $parts = array();
         foreach ($assocArr as $k => $v) {
             $parts[] = $k . '=' . $v;
         }
         $str = implode('&', $parts);
-
         openssl_sign($str, $sign, $priKey);
         openssl_free_key($priKey);
 
@@ -220,32 +217,24 @@ class Baidu
         if (!isset($assocArr['rsaSign']) || empty($assocArr) || empty($rsaPubKeyStr)) {
             return false;
         }
-
         if (!function_exists('openssl_pkey_get_public') || !function_exists('openssl_verify')) {
             throw new Exception("openssl扩展不存在");
         }
 
         $sign = $assocArr['rsaSign'];
         unset($assocArr['rsaSign']);
-
         if (empty($assocArr)) {
             return false;
         }
-
         ksort($assocArr); // 参数按字典顺序排序
-
         $parts = array();
         foreach ($assocArr as $k => $v) {
             $parts[] = $k . '=' . $v;
         }
         $str = implode('&', $parts);
-
         $sign = base64_decode($sign);
-
         $rsaPubKeyPem = self::convertRSAKeyStr2Pem($rsaPubKeyStr);
-
         $pubKey = openssl_pkey_get_public($rsaPubKeyPem);
-
         $result = (bool)openssl_verify($str, $sign, $pubKey);
         openssl_free_key($pubKey);
 
@@ -278,47 +267,14 @@ class Baidu
         if (!function_exists('openssl_pkey_get_public') || !function_exists('openssl_pkey_get_private')) {
             return false;
         }
-
         if ($keyType == 0 && false == openssl_pkey_get_public($rsaKeyPem)) {
             return false;
         }
-
         if ($keyType == 1 && false == openssl_pkey_get_private($rsaKeyPem)) {
             return false;
         }
 
         return $rsaKeyPem;
-    }
-
-    /**
-     * curl post请求
-     * @param string $url 地址
-     * @param string $postData 数据
-     * @param array $header 头部
-     * @return bool|string
-     * @Date 2020/9/17 17:12
-     * @Author wzb
-     */
-    public static function post_curl($url='',$postData='',$header=[]){
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_HEADER, false);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5000);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5000);
-
-        if($header){
-            curl_setopt($ch, CURLOPT_HTTPHEADER,$header);
-        }
-
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        $result = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErrNo = curl_errno($ch);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
-        return $result;
     }
 
 }
