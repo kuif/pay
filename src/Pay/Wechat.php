@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2020-10-23T14:21:38+08:00
+ * @Last Modified time: 2020-10-24 14:31:58
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -27,9 +27,8 @@ class Wechat
         'xcxappid'      => '', // 微信小程序appid
         'mch_id'        => '', // 微信支付 mch_id 商户收款账号
         'key'           => '', // 微信支付key
-        'appsecret'     => '', // 公众帐号secert(公众号支付专用)
+        'appsecret'     => '', // 公众帐号secert(公众号支付获取openid使用)
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
-        'redirect_uri'  => '', // 公众号支付时，没有code，获取openid使用
         'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
         'cert_key'      => './cert/apiclient_key.pem', // 证书（退款，红包时使用）
     );
@@ -52,7 +51,6 @@ class Wechat
      *      'body'          => '', // 产品描述
      *      'total_fee'     => '', // 订单金额（分）
      *      'out_trade_no'  => '', // 订单编号
-     *      'product_id'    => '', // 产品id
      *      'trade_type'    => '', // 类型：JSAPI--JSAPI支付（或小程序支付）、NATIVE--Native支付、APP--app支付，MWEB--H5支付
      * );
      */
@@ -105,20 +103,18 @@ class Wechat
      *      'body'          => '', // 产品描述
      *      'total_fee'     => '', // 订单金额（分）
      *      'out_trade_no'  => '', // 订单编号
-     *      'product_id'    => '', // 产品id（可用订单编号）
      * );
      */
     public static function qrcodePay($order=NULL)
     {
-        if(!is_array($order) || count($order) < 4){
+        if(!is_array($order) || count($order) < 3){
             die("数组数据信息缺失！");
         }
+        $order['product_id'] = $order['out_trade_no'] ?? time(); // Native支付
         $order['trade_type'] = 'NATIVE'; // Native支付
         $result = self::unifiedOrder($order);
         $decodeurl = urldecode($result['code_url']);
         return $decodeurl;
-        // qrcode($decodeurl);
-        // qrcodeWithPicture($decodeurl);
     }
 
     /**
@@ -129,38 +125,41 @@ class Wechat
      *      'body'          => '', // 产品描述
      *      'total_fee'     => '', // 订单金额（分）
      *      'out_trade_no'  => '', // 订单编号
-     *      'product_id'    => '', // 产品id（可用订单编号）
      * );
      */
-    public static function jsPay($order=NULL,$code=NULL){
+    public static function jsPay($order=NULL, $code=NULL){
         $config=self::$config;
-        if (!is_array($order) || count($order) < 4)
+        if (!is_array($order) || count($order) < 3)
             die("数组数据信息缺失！");
-        if (count($order) == 5) {
+        if (count($order) == 4) {
             $data = self::xcxPay($order, false); // 获取支付相关信息(获取非小程序信息)
             return $data;
         }
-        empty($code) && $code = $_GET['code'];
+        $code = $_GET['code'] ?? '';
+
         $params = ['appid' => $config['appid']];
         // 如果没有get参数没有code；则重定向去获取openid；
         if (empty($code)) {
-            $params['redirect_uri'] = urlencode($config['redirect_uri']); // 返回的url
+            $redirect_uri = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['SERVER_NAME'] . rtrim($_SERVER['REDIRECT_URL'], '/') . '/'; // 重定向地址
+            $params['redirect_uri'] = $redirect_uri; // 返回的url
             $params['response_type'] = 'code';
             $params['scope'] = 'snsapi_base';
             $params['state'] = $order['out_trade_no']; // 获取订单号
 
             $url = 'https://open.weixin.qq.com/connect/oauth2/authorize?'. http_build_query($params) .'#wechat_redirect';
             header('Location: '.$url);
+            die;
         } else {
             $params['secret'] = $config['appsecret'];
             $params['code'] = $code;
             $params['grant_type'] = 'authorization_code';
 
-            // 通过code获取access_token
+            // 通过code获取access_token以及openid
             $url = 'https://api.weixin.qq.com/sns/oauth2/access_token';
             $response = Http::get($url, $params); // 进行GET请求
-
             $result = json_decode($response, true);
+
+            dump($result);die;
             $order['openid'] = $result['openid']; // 获取到的openid
             $data = self::xcxPay($order, false); // 获取支付相关信息(获取非小程序信息)
             return $data;
@@ -176,13 +175,12 @@ class Wechat
      *      'body'          => '', // 产品描述
      *      'total_fee'     => '', // 订单金额（分）
      *      'out_trade_no'  => '', // 订单编号
-     *      'product_id'    => '', // 产品id（可用订单编号）
      *      'openid'        => '', // 用户openid
      * );
      */
     public static function xcxPay($order=NULL,$type=true)
     {
-        if(!is_array($order) || count($order) < 5){
+        if(!is_array($order) || count($order) < 4){
             die("数组数据信息缺失！");
         }
         $order['trade_type'] = 'JSAPI'; // 小程序支付
@@ -212,12 +210,11 @@ class Wechat
      *      'body'          => '', // 产品描述
      *      'total_fee'     => '', // 订单金额（分）
      *      'out_trade_no'  => '', // 订单编号
-     *      'product_id'    => '', // 产品id（可用订单编号）
      * );
      */
     public static function h5Pay($order=NULL)
     {
-        if(!is_array($order) || count($order) < 4){
+        if(!is_array($order) || count($order) < 3){
             die("数组数据信息缺失！");
         }
         $order['trade_type'] = 'MWEB'; // H5支付
