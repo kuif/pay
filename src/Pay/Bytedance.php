@@ -3,12 +3,11 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2020-10-23T14:12:28+08:00
+ * @Last Modified time: 2020-10-30 13:58:54
  */
 namespace fengkui\Pay;
 
 use Yansongda\Pay\Pay;
-use fengkui\Supports\Http;
 
 /**
  * Bytedance 字节跳动支付
