@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2020-10-24 14:31:58
+ * @Last Modified time: 2021-01-11 19:01:50
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -141,14 +141,13 @@ class Wechat
         // 如果没有get参数没有code；则重定向去获取openid；
         if (empty($code)) {
             $redirect_uri = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['SERVER_NAME'] . rtrim($_SERVER['REDIRECT_URL'], '/') . '/'; // 重定向地址
+
             $params['redirect_uri'] = $redirect_uri; // 返回的url
             $params['response_type'] = 'code';
             $params['scope'] = 'snsapi_base';
             $params['state'] = $order['out_trade_no']; // 获取订单号
 
             $url = 'https://open.weixin.qq.com/connect/oauth2/authorize?'. http_build_query($params) .'#wechat_redirect';
-            header('Location: '.$url);
-            die;
         } else {
             $params['secret'] = $config['appsecret'];
             $params['code'] = $code;
@@ -159,11 +158,15 @@ class Wechat
             $response = Http::get($url, $params); // 进行GET请求
             $result = json_decode($response, true);
 
-            dump($result);die;
-            $order['openid'] = $result['openid']; // 获取到的openid
+            $openid = $result['openid'];
+            $order['openid'] = $openid; // 获取到的openid
             $data = self::xcxPay($order, false); // 获取支付相关信息(获取非小程序信息)
-            return $data;
+
+            $url = $config['redirect_uri'] ?? $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['SERVER_NAME'];
+            $url .= '?' . http_build_query($data);
         }
+        header('Location: '. $url);
+        die;
     }
 
     /**
