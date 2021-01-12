@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-01-11 19:01:50
+ * @Last Modified time: 2021-01-12 11:09:35
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -19,6 +19,21 @@ use fengkui\Supports\Http;
  */
 class Wechat
 {
+    // 统一下单
+    private static $unifiedOrderUrl = 'https://api.mch.weixin.qq.com/pay/unifiedorder';
+    // 查询订单
+    private static $orderQueryUrl = 'https://api.mch.weixin.qq.com/pay/orderquery';
+    // 关闭订单
+    private static $closeOrderUrl = 'https://api.mch.weixin.qq.com/pay/closeorder';
+    // 申请退款
+    private static $refundUrl = 'https://api.mch.weixin.qq.com/secapi/pay/refund';
+    // 查询退款
+    private static $refundQueryUrl = 'https://api.mch.weixin.qq.com/pay/refundquery';
+    // 静默授权，获取code
+    private static $authorizeUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize';
+    // 通过code获取access_token以及openid
+    private static $accessTokenUrl = 'https://api.weixin.qq.com/sns/oauth2/access_token';
+
     // 当前请求的 Host: 头部的内容
     private static $referer = '';
     // 支付完整配置
@@ -29,6 +44,7 @@ class Wechat
         'key'           => '', // 微信支付key
         'appsecret'     => '', // 公众帐号secert(公众号支付获取openid使用)
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
+        'redirect_url'  => '', // 公众号支付，调起支付页面
         'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
         'cert_key'      => './cert/apiclient_key.pem', // 证书（退款，红包时使用）
     );
@@ -69,13 +85,12 @@ class Wechat
         $sign = self::makeSign($data); // 生成签名
         $data['sign'] = $sign;
         $xml = self::array_to_xml($data);
-        $url = 'https://api.mch.weixin.qq.com/pay/unifiedorder';//接收xml数据的文件
-        $header[] = "Content-type: text/xml";//定义content-type为xml,注意是数组
-        $ci = curl_init ($url);
-        curl_setopt($ci, CURLOPT_URL, $url);
+        $header[] = "Content-type: text/xml"; // 定义content-type为xml,注意是数组
+        $ci = curl_init (self::$unifiedOrderUrl);
+        curl_setopt($ci, CURLOPT_URL, self::$unifiedOrderUrl);
         curl_setopt($ci, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ci, CURLOPT_SSL_VERIFYPEER, false); // 兼容本地没有指定curl.cainfo路径的错误
-        curl_setopt($ci, CURLOPT_REFERER, self::$referer); //设置 referer
+        curl_setopt($ci, CURLOPT_REFERER, self::$referer); // 设置 referer
         curl_setopt($ci, CURLOPT_HTTPHEADER, $header);
         curl_setopt($ci, CURLOPT_POST, 1);
         curl_setopt($ci, CURLOPT_POSTFIELDS, $xml);
@@ -136,34 +151,30 @@ class Wechat
             return $data;
         }
         $code = $_GET['code'] ?? '';
+        $redirectUri = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . rtrim($_SERVER['REQUEST_URI'], '/') . '/'; // 重定向地址
 
         $params = ['appid' => $config['appid']];
         // 如果没有get参数没有code；则重定向去获取openid；
         if (empty($code)) {
-            $redirect_uri = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['SERVER_NAME'] . rtrim($_SERVER['REDIRECT_URL'], '/') . '/'; // 重定向地址
-
-            $params['redirect_uri'] = $redirect_uri; // 返回的url
+            $params['redirect_uri'] = $redirectUri; // 返回的url
             $params['response_type'] = 'code';
             $params['scope'] = 'snsapi_base';
             $params['state'] = $order['out_trade_no']; // 获取订单号
 
-            $url = 'https://open.weixin.qq.com/connect/oauth2/authorize?'. http_build_query($params) .'#wechat_redirect';
+            $url = self::$authorizeUrl . '?'. http_build_query($params) .'#wechat_redirect';
         } else {
             $params['secret'] = $config['appsecret'];
             $params['code'] = $code;
             $params['grant_type'] = 'authorization_code';
 
-            // 通过code获取access_token以及openid
-            $url = 'https://api.weixin.qq.com/sns/oauth2/access_token';
-            $response = Http::get($url, $params); // 进行GET请求
+            $response = Http::get(self::$accessTokenUrl, $params); // 进行GET请求
             $result = json_decode($response, true);
 
-            $openid = $result['openid'];
-            $order['openid'] = $openid; // 获取到的openid
+            $order['openid'] = $result['openid']; // 获取到的openid
             $data = self::xcxPay($order, false); // 获取支付相关信息(获取非小程序信息)
 
-            $url = $config['redirect_uri'] ?? $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['SERVER_NAME'];
-            $url .= '?' . http_build_query($data);
+            $url = $config['redirect_url'] ?? $redirectUri;
+            $url .= '?data=' . json_encode($data);
         }
         header('Location: '. $url);
         die;
@@ -260,12 +271,11 @@ class Wechat
         $sign = self::makeSign($data);
         $data['sign'] = $sign;
         $xml = self::array_to_xml($data);
-        $url = 'https://api.mch.weixin.qq.com/secapi/pay/refund';//接收xml数据的文件
         $cert = [
             'cert' => $config['cert_client'],
             'key' => $config['cert_key'],
         ];
-        $response = Http::post($url, $xml, ['Content-type: text/xml'], $cert);
+        $response = Http::post(self::$refundUrl, $xml, ['Content-type: text/xml'], $cert);
         $result = self::xml_to_array($response);
         // 显示错误信息
         if ($result['return_code']=='FAIL') {
