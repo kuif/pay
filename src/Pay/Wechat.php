@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-01-12 11:09:35
+ * @Last Modified time: 2021-03-23T15:18:25+08:00
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -78,7 +78,7 @@ class Wechat
             'appid'             => empty($type) ? $config['appid'] : $config['xcxappid'],
             'mch_id'            => $config['mch_id'],
             'nonce_str'         => 'test',
-            'spbill_create_ip'  => self::get_iP(),
+            'spbill_create_ip'  => self::get_ip(),
             'notify_url'        => $config['notify_url']
         );
         $data = array_merge($order, $params); // 合并配置数据和订单数据
@@ -337,13 +337,14 @@ class Wechat
         $data = array_filter($data);
         //签名步骤一：按字典序排序参数
         ksort($data);
-        $string_a = http_build_query($data);
-        $string_a = urldecode($string_a);
+        $string = http_build_query($data);
+        $string = urldecode($string);
         //签名步骤二：在string后加入key
         $config = self::$config;
-        $string_sign_temp = $string_a."&key=".$config['key'];
+        $string = $string."&key=".$config['key'];
         //签名步骤三：MD5加密
-        $sign = md5($string_sign_temp);
+        $sign = md5($string);
+
         // 签名步骤四：所有字符转为大写
         $result = strtoupper($sign);
         return $result;
@@ -408,10 +409,10 @@ class Wechat
     }
 
     /** fengkui.net
-     * [get_iP 定义一个函数get_iP() 客户端IP]
+     * [get_ip 定义一个函数get_ip() 客户端IP]
      * @return [type] [description]
      */
-    public static function get_iP()
+    public static function get_ip()
     {
         if (getenv("HTTP_CLIENT_IP"))
             $ip = getenv("HTTP_CLIENT_IP");
