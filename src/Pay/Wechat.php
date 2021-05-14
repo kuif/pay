@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-03-23T15:18:25+08:00
+ * @Last Modified time: 2021-03-26T14:04:17+08:00
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -41,8 +41,9 @@ class Wechat
         'appid'         => '', // 微信支付appid
         'xcxappid'      => '', // 微信小程序appid
         'mch_id'        => '', // 微信支付 mch_id 商户收款账号
-        'key'           => '', // 微信支付key
-        'appsecret'     => '', // 公众帐号secert(公众号支付获取openid使用)
+        'sub_mch_id'    => '', // 微信支付 sub_mch_id 分配的子商户号
+        'key'           => '', // 微信支付 key
+        'appsecret'     => '', // 公众帐号 secert (公众号支付获取openid使用)
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
         'redirect_url'  => '', // 公众号支付，调起支付页面
         'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
@@ -81,6 +82,9 @@ class Wechat
             'spbill_create_ip'  => self::get_ip(),
             'notify_url'        => $config['notify_url']
         );
+
+        !empty($config['sub_mch_id']) && $params['sub_mch_id'] = $config['sub_mch_id'];
+
         $data = array_merge($order, $params); // 合并配置数据和订单数据
         $sign = self::makeSign($data); // 生成签名
         $data['sign'] = $sign;

@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2020-10-30 13:58:54
+ * @Last Modified time: 2021-05-14 14:16:08
  */
 namespace fengkui\Pay;
 
@@ -32,10 +32,10 @@ class Bytedance
 
     /**
      * [xcxPay 字节跳动小程序支付]
-     * @param  string $order [订单信息]
-     * @param  string $type  [支付类型 wechat ali]
-     * @param  string $url   [对应支付地址]
-     * @return [type]        [description]
+     * @param  string $order  [订单信息]
+     * @param  array  $alipay [支付宝支付配置]
+     * @param  array  $wechat [微信支付配置]
+     * @return [type]         [description]
      * $order = array(
      *      'body'          => '', // 产品描述
      *      'total_amount'  => '', // 订单金额（分）
