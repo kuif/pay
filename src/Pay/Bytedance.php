@@ -3,18 +3,35 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-08T09:52:04+08:00
+ * @Last Modified time: 2021-06-08T10:45:11+08:00
  */
 namespace fengkui\Pay;
 
-use Yansongda\Pay\Pay;
+use fengkui\Supports\Http;
 
 /**
  * Bytedance 字节跳动支付
- * 小程序收银台简介（pay）已废弃
+ * 小程序担保支付
  */
 class Bytedance
 {
+    // 服务端预下单
+    private static $createOrderUrl = 'https://developer.toutiao.com/api/apps/ecpay/v1/create_order';
+    // 订单查询
+    private static $queryOrderUrl = 'https://developer.toutiao.com/api/apps/ecpay/v1/query_order';
+    // 退款
+    private static $createRefundUrl = 'https://developer.toutiao.com/api/apps/ecpay/v1/create_refund';
+    // 查询退款
+    private static $queryRefundUrl = 'https://developer.toutiao.com/api/apps/ecpay/v1/query_refund';
+    // 分账请求
+    private static $settleUrl = 'https://developer.toutiao.com/api/apps/ecpay/v1/settle';
+    // 查询分账
+    private static $querySettleUrl = 'https://developer.toutiao.com/api/apps/ecpay/v1/query_settle';
+    // 服务商进件
+    private static $addMerchantUrl = 'https://developer.toutiao.com/api/apps/ecpay/saas/add_merchant';
+    // 分账方进件
+    private static $addSubMerchantUrl = 'https://developer.toutiao.com/api/apps/ecpay/saas/add_sub_merchant';
+
     // 支付相关配置
     private static $config = array(
         'mch_id'    => '', // 商户号
@@ -32,126 +49,90 @@ class Bytedance
     }
 
     /**
-     * [xcxPay 字节跳动小程序支付]
-     * @param  string $order  [订单信息]
-     * @param  array  $alipay [支付宝支付配置]
-     * @param  array  $wechat [微信支付配置]
-     * @return [type]         [description]
+     * [xcxPay ]
+     * @param  [type] $order [description]
+     * @return [type]        [description]
      * $order = array(
-     *      'body'          => '', // 产品描述
-     *      'total_amount'  => '', // 订单金额（分）
-     *      'order_sn'      => '', // 订单编号
+     *      'body'         => '', // 产品描述
+     *      'total_amount' => '', // 订单金额（分）
+     *      'order_sn'     => '', // 订单编号
      * );
      */
-    public static function xcxPay($order='', $alipay=[], $wechat=[])
+    public static function createOrder($order)
     {
-        if (!is_array($order) || count($order) < 3 || (!$alipay && !$wechat))
-            die("数组数据信息缺失！");
-
         $config = self::$config;
-        $time = time();
-        $data = [
-            "app_id"        => $config['app_id'],
-            "sign_type"     => "MD5",
-            "out_order_no"  => (string)$order['order_sn'],
-            "merchant_id"   => $config['mch_id'],
-            "timestamp"     => (string)$time,
-            "product_code"  => "pay",
-            "payment_type"  => "direct",
-            "total_amount"  => $order['total_amount'],
-            "trade_type"    => "H5",
-            "uid"           => self::get_rand_str(),
-            "version"       => "2.0",
-            "currency"      => "CNY",
-            "subject"       => $order['body'],
-            "body"          => $order['body'],
-            "trade_time"    => (string)$time,
-            "valid_time"    => "300",
-            "notify_url"    => $config['notify_url'],
-            // "risk_info" => json_encode(['ip' => self::get_iP()])
+        $params = [
+            'app_id'        => $config['app_id'], // 小程序 AppID
+            'out_order_no'  => $order['order_sn'], // 开发者侧的订单号, 同一小程序下不可重复
+            'total_amount'  => $order['total_amount'], // 支付价格; 接口中参数支付金额单位为[分]
+            'subject'       => $order['body'], // 商品描述; 长度限制 128 字节，不超过 42 个汉字
+            'body'          => $order['body'], // 商品详情
+            'valid_time'    => $order['body'], // 订单过期时间(秒); 最小 15 分钟，最大两天
+            // 'sign'          => '', // 开发者对核心字段签名, 签名方式见文档附录, 防止传输过程中出现意外
+            // 'cp_extra'      => '', // 开发者自定义字段，回调原样回传
+            'notify_url'    => $config['notify_url'], // 商户自定义回调地址
+            // 'thirdparty_id' => '', // 第三方平台服务商 id，非服务商模式留空
+            'disable_msg'   => 1, // 是否屏蔽担保支付的推送消息，1-屏蔽 0-非屏蔽，接入 POI 必传
+            // 'msg_page'      => '', // 担保支付消息跳转页
+            // 'store_uid'     => '', // 多门店模式下，门店 uid
         ];
+        !empty($order['cp_extra']) && $params['cp_extra'] = $order['cp_extra'];
+        !empty($config['thirdparty_id']) && $params['thirdparty_id'] = $config['thirdparty_id'];
+        if (!empty($config['msg_page'])) {
+            $params['disable_msg'] = 0;
+            $params['msg_page'] = $config['msg_page'];
+        }
 
-        if ($alipay) { // 支付宝支付
-            $aliOrder = array(
-                'out_trade_no'  => $order['order_sn'],
-                'total_amount'  => $order['total_amount']/100, // **单位：元**
-                'subject'       => $order['body'],
-            );
-            $alipayUrl = Pay::alipay($alipay)->app($aliOrder);
-            $data['alipay_url'] = $alipayUrl->getContent();
-        }
-        if ($wechat) { // 微信支付
-            $wechatOrder = [
-                'out_trade_no'  => $order['order_sn'],
-                'total_fee'     => $order['total_amount'], // **单位：分**
-                'body'          => $order['body'],
-            ];
-            $wxUrl = Pay::wechat($wechat)->wap($wechatOrder);
-            $data['wx_url'] = $wxUrl->getTargetUrl();
-            $data['wx_type'] = 'MWEB';
-        }
-        $data["sign"] = self::makeSign($data, $config['secret']);
-        $data["risk_info"] = json_encode(['ip' => self::get_iP()]);
-        return $data;
+        $params['sign'] = self::makeSign($params);
+
+        $url = self::$createOrderUrl;
+        $response = Http::post($url, $params);
+        $result = json_decode($response, true);
+        return $result;
     }
 
     /**
-     * [makeSign 生成签名]
-     * @param  [type] $data   [入参数据]
-     * @param  string $secret [微信支付秘钥]
-     * @return [type]         [description]
+     * [notify 回调验证]
+     * @return [array] [返回数组格式的notify数据]
      */
-    protected static function makeSign($data, $secret = ''){
-        // 获取微信支付秘钥
-        // 去空
-        $data=array_filter($data);
-        //签名步骤一：按字典序排序参数
-        ksort($data);
-        $string_a=http_build_query($data);
-        $string_a=urldecode($string_a);
-
-        //签名步骤二：在string后加入KEY
-        //$config=self::$config;
-        $string_sign_temp = $string_a . $secret;
-        //签名步骤三：MD5加密
-        $sign = md5($string_sign_temp);
-        // 签名步骤四：所有字符转为大写
-        // $result=strtoupper($sign);
-        return $sign;
-    }
-
-    /**
-     * [get_rand_str 产生随机字符串，不长于32位]
-     * @param  integer $length [长度]
-     * @return [type]          [description]
-     */
-    protected static function get_rand_str($length = 32) {
-        $chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-        $str ="";
-        for ( $i = 0; $i < $length; $i++ )  {
-            $str .= substr($chars, mt_rand(0, strlen($chars)-1), 1);
-        }
-        return $str;
-    }
-
-    /** fengkui.net
-     * [get_iP 定义一个函数get_iP() 客户端IP]
-     * @return [type] [description]
-     */
-    public static function get_iP()
+    public static function notify()
     {
-        if (getenv("HTTP_CLIENT_IP"))
-            $ip = getenv("HTTP_CLIENT_IP");
-        else if(getenv("HTTP_X_FORWARDED_FOR"))
-            $ip = getenv("HTTP_X_FORWARDED_FOR");
-        else if(getenv("REMOTE_ADDR"))
-            $ip = getenv("REMOTE_ADDR");
-        else $ip = "Unknow";
+        $data = $_POST; // 获取xml
+        $config = self::$config;
+        if (!$data || empty($data['msg']))
+            die('暂无回调信息');
 
-        if(preg_match('/^((?:(?:25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))\.){3}(?:25[0-5]|2[0-4]\d|((1\d{2})|([1 -9]?\d))))$/', $ip))
-            return $ip;
-        else
-            return '';
+        $result = json_decode($data['msg'], true); // 进行签名验证
+        // 判断签名是否正确  判断支付状态
+        if ($result && $data['type']=='payment') {
+            return $data;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * [makeSign 生成秘钥]
+     * @param  [type] $data [加密数据]
+     * @return [type]       [description]
+     */
+    public static function makeSign($data) {
+        $rList = array();
+        foreach($data as $k = >$v) {
+            if ($k == "other_settle_params" || $k == "app_id" || $k == "sign" || $k == "thirdparty_id")
+                continue;
+            $value = trim(strval($v));
+            $len = strlen($value);
+            if ($len > 1 && substr($value, 0,1)=="\"" && substr($value,$len, $len-1)=="\"")
+                $value = substr($value,1, $len-1);
+            $value = trim($value);
+            if ($value == "" || $value == "null")
+                continue;
+            array_push($rList, $value);
+        }
+        array_push($rList, "your_payment_salt");
+        sort($rList, 2);
+        return md5(implode('&', $rList));
     }
 
 }

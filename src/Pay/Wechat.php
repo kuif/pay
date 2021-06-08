@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-08T09:52:08+08:00
+ * @Last Modified time: 2021-06-08T10:54:24+08:00
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -16,7 +16,7 @@ use fengkui\Supports\Http;
 
 /**
  * Wechat 微信支付
- * 旧版（V2）接口
+ * 新版（V3）接口（更新中）
  */
 class Wechat
 {
