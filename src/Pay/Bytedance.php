@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-09T18:43:30+08:00
+ * @Last Modified time: 2021-06-10T10:21:11+08:00
  */
 namespace fengkui\Pay;
 
@@ -34,10 +34,10 @@ class Bytedance
 
     // 支付相关配置
     private static $config = array(
-        'mch_id'    => '', // 商户号
-        'app_id'    => '', // App ID
-        'secret'    => '', // 支付secret
+        'app_id'    => '111111111', // App ID
+        'salt'      => '222222222', // 支付密钥值
         'notify_url' => '', // 支付回调地址
+        'thirdparty_id' => '', // 第三方平台服务商 id，非服务商模式留空
     );
 
     /**
@@ -63,11 +63,11 @@ class Bytedance
         $config = self::$config;
         $params = [
             'app_id'        => $config['app_id'], // 是 小程序 AppID
-            'out_order_no'  => $order['order_sn'], // 是 开发者侧的订单号, 同一小程序下不可重复
+            'out_order_no'  => (string)$order['order_sn'], // 是 开发者侧的订单号, 同一小程序下不可重复
             'total_amount'  => $order['total_amount'], // 是 支付价格; 接口中参数支付金额单位为[分]
             'subject'       => $order['body'], // 是 商品描述; 长度限制 128 字节，不超过 42 个汉字
             'body'          => $order['body'], // 是 商品详情
-            'valid_time'    => $order['body'], // 是 订单过期时间(秒); 最小 15 分钟，最大两天
+            'valid_time'    => 3600 * 2, // 是 订单过期时间(秒); 最小 15 分钟，最大两天
             // 'sign'          => '', // 是 开发者对核心字段签名, 签名方式见文档附录, 防止传输过程中出现意外
             // 'cp_extra'      => '', // 否 开发者自定义字段，回调原样回传
             // 'notify_url'    => $config['notify_url'], // 否 商户自定义回调地址
@@ -85,9 +85,9 @@ class Bytedance
         }
 
         $params['sign'] = self::makeSign($params);
-
+        // dump($params);die;
         $url = self::$createOrderUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -102,7 +102,7 @@ class Bytedance
         $config = self::$config;
         $params = [
             'app_id' => $config['app_id'], // 小程序 AppID
-            'out_order_no' => $orderSn, // 开发者侧的订单号, 不可重复
+            'out_order_no' => (string)$orderSn, // 开发者侧的订单号, 不可重复
             // 'sign' => '', // 开发者对核心字段签名, 签名方式见文档, 防止传输过程中出现意外
             // 'thirdparty_id' => '', // 服务商模式接入必传	第三方平台服务商 id，非服务商模式留空
         ];
@@ -111,7 +111,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$queryOrderUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -152,8 +152,8 @@ class Bytedance
         $config = self::$config;
         $params = [
             'app_id'        => $config['app_id'], // 是	小程序 id
-            'out_order_no'  => $order['order_sn'], // 是	商户分配订单号，标识进行退款的订单
-            'out_refund_no' => $order['refund_sn'], // 是	商户分配退款号
+            'out_order_no'  => (string)$order['order_sn'], // 是	商户分配订单号，标识进行退款的订单
+            'out_refund_no' => (string)$order['refund_sn'], // 是	商户分配退款号
             'refund_amount' => $order['total_amount'], // 是	退款金额，单位[分]
             'reason'        => $order['body'] ?? '用户申请退款', // 是	退款理由，长度上限 100
             // 'cp_extra'      => '', // 否	开发者自定义字段，回调原样回传
@@ -176,7 +176,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$queryOrderUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -200,7 +200,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$queryRefundUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -240,8 +240,8 @@ class Bytedance
         $config = self::$config;
         $params = [
             'app_id'        => $config['app_id'], // 是 小程序 AppID
-            'out_order_no'  => $order['order_sn'], // 是 商户分配订单号，标识进行结算的订单
-            'out_settle_no' => $order['settle_sn'], // 是 开发者侧的结算号, 不可重复
+            'out_order_no'  => (string)$order['order_sn'], // 是 商户分配订单号，标识进行结算的订单
+            'out_settle_no' => (string)$order['settle_sn'], // 是 开发者侧的结算号, 不可重复
             'settle_desc'   => $order['body'], // 是	结算描述，长度限制 80 个字符
             // 'cp_extra'      => '', // 否	开发者自定义字段，回调原样回传
             // 'notify_url'    => '', // 否	商户自定义回调地址
@@ -256,7 +256,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$settleUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -280,7 +280,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$querySettleUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -320,7 +320,7 @@ class Bytedance
         ];
 
         $url = self::$addMerchantUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -343,7 +343,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$addSubMerchantUrl;
-        $response = Http::post($url, $params);
+        $response = Http::post($url, json_encode($params));
         $result = json_decode($response, true);
         return $result;
     }
@@ -363,8 +363,9 @@ class Bytedance
      * @return [type]       [description]
      */
     public static function makeSign($data) {
+        $config = self::$config;
         $rList = array();
-        foreach($data as $k = >$v) {
+        foreach($data as $k => $v) {
             if ($k == "other_settle_params" || $k == "app_id" || $k == "sign" || $k == "thirdparty_id")
                 continue;
             $value = trim(strval($v));
@@ -376,7 +377,7 @@ class Bytedance
                 continue;
             array_push($rList, $value);
         }
-        array_push($rList, "your_payment_salt");
+        array_push($rList, $config['salt']);
         sort($rList, 2);
         return md5(implode('&', $rList));
     }

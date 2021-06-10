@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-08T10:54:24+08:00
+ * @Last Modified time: 2021-06-10T18:56:59+08:00
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -35,18 +35,26 @@ class Wechat
     // 通过code获取access_token以及openid
     private static $accessTokenUrl = 'https://api.weixin.qq.com/sns/oauth2/access_token';
 
+    // 新版相关接口
+    // GET 获取平台证书列表
+    private static $certificatesUrl = 'https://api.mch.weixin.qq.com/v3/certificates';
+    // JSAPI下单
+    private static $jsapiUrl = 'https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi';
+
     // 当前请求的 Host: 头部的内容
     private static $referer = '';
     // 支付完整配置
     private static $config = array(
+        'xcxid'         => '', // 小程序appid
         'appid'         => '', // 微信支付appid
-        'xcxappid'      => '', // 微信小程序appid
-        'mch_id'        => '', // 微信支付 mch_id 商户收款账号
-        'sub_mch_id'    => '', // 微信支付 sub_mch_id 分配的子商户号
+        'mchid'         => '', // 微信支付 mch_id 商户收款账号
         'key'           => '', // 微信支付 key
         'appsecret'     => '', // 公众帐号 secert (公众号支付获取openid使用)
+
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
         'redirect_url'  => '', // 公众号支付，调起支付页面
+
+        'serial_no'     => '', // 证书序列号
         'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
         'cert_key'      => './cert/apiclient_key.pem', // 证书（退款，红包时使用）
     );
@@ -56,7 +64,7 @@ class Wechat
      * @param [type] $config [传递微信支付相关配置]
      */
     public function __construct($config=NULL, $referer=NULL){
-        $config && self::$config = $config;
+        $config && self::$config = array_merge(self::$config, $config);
         self::$referer = $referer ? $referer : $_SERVER['HTTP_HOST'];
     }
 
@@ -72,47 +80,74 @@ class Wechat
      *      'trade_type'    => '', // 类型：JSAPI--JSAPI支付（或小程序支付）、NATIVE--Native支付、APP--app支付，MWEB--H5支付
      * );
      */
-    public static function unifiedOrder($order, $type=NULL)
+    public static function unifiedOrder($order, $url)
     {
         $config = array_filter(self::$config);
+
         // 获取配置项
         $params = array(
-            'appid'             => empty($type) ? $config['appid'] : $config['xcxappid'],
-            'mch_id'            => $config['mch_id'],
-            'nonce_str'         => 'test',
-            'spbill_create_ip'  => self::get_ip(),
-            'notify_url'        => $config['notify_url']
+            'appid'         => $config['xcxid'],
+            'mchid'         => $config['mchid'],
+            'scene_info'    => ['payer_client_ip' => self::get_ip()],
+            'notify_url'    => $config['notify_url']
         );
 
         !empty($config['sub_mch_id']) && $params['sub_mch_id'] = $config['sub_mch_id'];
 
-        $data = array_merge($order, $params); // 合并配置数据和订单数据
-        $sign = self::makeSign($data); // 生成签名
-        $data['sign'] = $sign;
-        $xml = self::array_to_xml($data);
-        $header[] = "Content-type: text/xml"; // 定义content-type为xml,注意是数组
-        $ci = curl_init (self::$unifiedOrderUrl);
-        curl_setopt($ci, CURLOPT_URL, self::$unifiedOrderUrl);
-        curl_setopt($ci, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ci, CURLOPT_SSL_VERIFYPEER, false); // 兼容本地没有指定curl.cainfo路径的错误
-        curl_setopt($ci, CURLOPT_REFERER, self::$referer); // 设置 referer
-        curl_setopt($ci, CURLOPT_HTTPHEADER, $header);
-        curl_setopt($ci, CURLOPT_POST, 1);
-        curl_setopt($ci, CURLOPT_POSTFIELDS, $xml);
-        $response = curl_exec($ci);
-        if(curl_errno($ci)){
-            die(curl_error($ci)); // 显示报错信息；终止继续执行
-        }
-        curl_close($ci);
-        $result = self::xml_to_array($response);
-        if ($result['return_code']=='FAIL')
-            die($result['return_msg']); // 显示错误信息
-        if ($result['result_code']=='FAIL')
-            die($result['err_code_des']); // 显示错误信息
+        $order['amount'] = ['total' => $order['total_amount']];
+        unset($order['total_amount']);
 
-        $result['sign'] = $sign;
-        $result['nonce_str'] = 'test';
+        $params = array_merge($order, $params); // 合并配置数据和订单数据
+        // $params['sign'] = self::makeSign($params); // 生成签名
+
+        $header = self::createAuthorization($url, $params, 'POST'); // 定义content-type为xml,注意是数组
+
+        $response = Http::post($url, json_encode($params), $header);
+        $result = json_decode($response, true);
+
+        // dump($result);die;
         return $result;
+    }
+
+        /**
+     * [xcxPay 获取jssdk需要用到的数据]
+     * @param  [type]  $order [订单信息数组]
+     * @param  boolean $type  [区分是否是小程序，默认 true]
+     * @return [type]         [description]
+     * $order = array(
+     *      'body'          => '', // 产品描述
+     *      'total_fee'     => '', // 订单金额（分）
+     *      'out_trade_no'  => '', // 订单编号
+     *      'openid'        => '', // 用户openid
+     * );
+     */
+    public static function xcxPay($order=NULL)
+    {
+        if(!is_array($order) || count($order) < 4){
+            die("数组数据信息缺失！");
+        }
+        // $order['trade_type'] = 'JSAPI'; // 小程序支付
+
+        $url = self::$jsapiUrl;
+        $order['payer'] = ['openid' => $order['openid']];
+        unset($order['openid']);
+
+        $result = self::unifiedOrder($order, $url);
+        if (!empty($result['prepay_id'])) {
+            $data = array (
+                'appId'     => self::$config['xcxid'],
+                'timeStamp' => (string)time(),
+                'nonceStr'  => self::get_rand_str(32, 0, 1), // 随机32位字符串
+                'package'   => 'prepay_id='.$result['prepay_id'],
+            );
+            $data['paySign'] = self::makeSign($data);
+            $data['signType'] = 'RSA';
+            return $data; // 数据小程序客户端
+        } else {
+            if ($result['err_code_des'])
+                die($result['err_code_des']);
+            return false;
+        }
     }
 
     /**
@@ -183,42 +218,6 @@ class Wechat
         }
         header('Location: '. $url);
         die;
-    }
-
-    /**
-     * [xcxPay 获取jssdk需要用到的数据]
-     * @param  [type]  $order [订单信息数组]
-     * @param  boolean $type  [区分是否是小程序，默认 true]
-     * @return [type]         [description]
-     * $order = array(
-     *      'body'          => '', // 产品描述
-     *      'total_fee'     => '', // 订单金额（分）
-     *      'out_trade_no'  => '', // 订单编号
-     *      'openid'        => '', // 用户openid
-     * );
-     */
-    public static function xcxPay($order=NULL,$type=true)
-    {
-        if(!is_array($order) || count($order) < 4){
-            die("数组数据信息缺失！");
-        }
-        $order['trade_type'] = 'JSAPI'; // 小程序支付
-        $result = self::unifiedOrder($order,$type);
-        if ($result['return_code']=='SUCCESS' && $result['result_code']=='SUCCESS') {
-            $data = array (
-                'appId'     => $type ? self::$config['xcxappid'] : self::$config['appid'],
-                'timeStamp' => (string)time(),
-                'nonceStr'  => self::get_rand_str(32, 0, 1), // 随机32位字符串
-                'package'   => 'prepay_id='.$result['prepay_id'],
-                'signType'  => 'MD5', // 加密方式
-            );
-            $data['paySign'] = self::makeSign($data);
-            return $data; // 数据小程序客户端
-        } else {
-            if ($result['err_code_des'])
-                die($result['err_code_des']);
-            return false;
-        }
     }
 
     /**
@@ -336,58 +335,53 @@ class Wechat
      * @param  [type] $data [description]
      * @return [type]       [description]
      */
-    public static function makeSign($data)
-    {
-        // 去空
-        $data = array_filter($data);
-        //签名步骤一：按字典序排序参数
-        ksort($data);
-        $string = http_build_query($data);
-        $string = urldecode($string);
-        //签名步骤二：在string后加入key
+    //生成v3 Authorization
+    protected static function createAuthorization($url, $data=[], $method='POST'){
         $config = self::$config;
-        $string = $string."&key=".$config['key'];
-        //签名步骤三：MD5加密
-        $sign = md5($string);
+        //商户号
+        $mchid = $config['mchid'];
+        // 证书序列号
+        $serial_no = $config['serial_no'];
 
-        // 签名步骤四：所有字符转为大写
-        $result = strtoupper($sign);
-        return $result;
+        // 解析url地址
+        $url_parts = parse_url($url);
+        //生成签名
+        $body = [
+            'method' => $method,
+            'url'   => ($url_parts['path'] . (!empty($url_parts['query']) ? "?${url_parts['query']}" : "")),
+            'time'  => time(), // 当前时间戳
+            'nonce' => self::get_rand_str(32, 0, 1), // 随机32位字符串
+            'data'  => (strtolower($method) == 'post' ? json_encode($data) : $data), // POST请求时 需要 转JSON字符串
+        ];
+        $sign = self::makeSign($body);
+        //Authorization 类型
+        $schema = 'WECHATPAY2-SHA256-RSA2048';
+        //生成token
+        $token = sprintf('mchid="%s",nonce_str="%s",timestamp="%d",serial_no="%s",signature="%s"', $mchid, $body['nonce'], $body['time'], $serial_no, $sign);
+
+        $header = [
+            'Content-Type:application/json',
+            'Accept:application/json',
+            'User-Agent:*/*',
+            'Authorization: '.  $schema . ' ' . $token
+        ];
+        return $header;
     }
 
-    /**
-     * [xml_to_array 将xml转为array]
-     * @param  [type] $xml [xml字符串]
-     * @return [type]      [转换得到的数组]
-     */
-    public static function xml_to_array($xml)
-    {
-        //禁止引用外部xml实体
-        libxml_disable_entity_loader(true);
-        $result = json_decode(json_encode(simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
-        return $result;
-    }
-
-    /**
-     * [array_to_xml 输出xml字符]
-     * @param  [type] $data [description]
-     * @return [type]       [description]
-     */
-    public static function array_to_xml($data)
-    {
-        if(!is_array($data) || count($data) <= 0){
-            die("数组数据异常！");
+    public static function makeSign($data){
+        $config = self::$config;
+        if (!in_array('sha256WithRSAEncryption', \openssl_get_md_methods(true))) {
+            throw new \RuntimeException("当前PHP环境不支持SHA256withRSA");
         }
-        $xml = "<xml>";
-        foreach ($data as $key=>$val){
-            if (is_numeric($val)){
-                $xml .= "<".$key.">".$val."</".$key.">";
-            }else{
-                $xml .= "<".$key."><![CDATA[".$val."]]></".$key.">";
-            }
+        // 拼接生成签名所需的字符串
+        $message = '';
+        foreach ($data as $value) {
+            $message .= $value . "\n";
         }
-        $xml .= "</xml>";
-        return $xml;
+        //生成签名
+        openssl_sign($message, $raw_sign, openssl_get_privatekey(file_get_contents($config['cert_key'])), 'sha256WithRSAEncryption');
+        $sign = base64_encode($raw_sign);
+        return $sign;
     }
 
     /** fengkui.net
