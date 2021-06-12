@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-09-27T16:28:31+08:00
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-08T09:52:16+08:00
+ * @Last Modified time: 2021-06-12T15:15:43+08:00
  */
 namespace fengkui\Pay;
 
@@ -28,7 +28,7 @@ class Baidu
      * @param [type] $config [传递支付相关配置]
      */
     public function __construct($config=NULL){
-        $config && self::$config = $config;
+        $config && self::$config = array_merge(self::$config, $config);
     }
 
     /**

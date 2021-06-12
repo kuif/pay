@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-10T10:21:11+08:00
+ * @Last Modified time: 2021-06-12T15:15:37+08:00
  */
 namespace fengkui\Pay;
 
@@ -34,9 +34,9 @@ class Bytedance
 
     // 支付相关配置
     private static $config = array(
-        'app_id'    => '111111111', // App ID
-        'salt'      => '222222222', // 支付密钥值
-        'notify_url' => '', // 支付回调地址
+        'app_id'        => '', // App ID
+        'salt'          => '', // 支付密钥值
+        'notify_url'    => '', // 支付回调地址
         'thirdparty_id' => '', // 第三方平台服务商 id，非服务商模式留空
     );
 
@@ -45,7 +45,7 @@ class Bytedance
      * @param [type] $config [传递支付相关配置]
      */
     public function __construct($config=NULL){
-        $config && self::$config = $config;
+        $config && self::$config = array_merge(self::$config, $config);
     }
 
     /**

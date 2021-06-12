@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-10T18:56:59+08:00
+ * @Last Modified time: 2021-06-12T15:09:54+08:00
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -12,6 +12,7 @@ ini_set('display_errors', '1');
 // 定义时区
 ini_set('date.timezone','Asia/Shanghai');
 
+use Exception;
 use fengkui\Supports\Http;
 
 /**
@@ -20,29 +21,20 @@ use fengkui\Supports\Http;
  */
 class Wechat
 {
-    // 统一下单
-    private static $unifiedOrderUrl = 'https://api.mch.weixin.qq.com/pay/unifiedorder';
-    // 查询订单
-    private static $orderQueryUrl = 'https://api.mch.weixin.qq.com/pay/orderquery';
-    // 关闭订单
-    private static $closeOrderUrl = 'https://api.mch.weixin.qq.com/pay/closeorder';
+    // 新版相关接口
+    // GET 获取平台证书列表
+    private static $certificatesUrl = 'https://api.mch.weixin.qq.com/v3/certificates';
+    // 统一下单地址
+    private static $transactionsUrl = 'https://api.mch.weixin.qq.com/v3/pay/transactions/';
+
     // 申请退款
-    private static $refundUrl = 'https://api.mch.weixin.qq.com/secapi/pay/refund';
-    // 查询退款
-    private static $refundQueryUrl = 'https://api.mch.weixin.qq.com/pay/refundquery';
+    private static $refundUrl = 'https://api.mch.weixin.qq.com/v3/refund/domestic/refunds';
+
     // 静默授权，获取code
     private static $authorizeUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize';
     // 通过code获取access_token以及openid
     private static $accessTokenUrl = 'https://api.weixin.qq.com/sns/oauth2/access_token';
 
-    // 新版相关接口
-    // GET 获取平台证书列表
-    private static $certificatesUrl = 'https://api.mch.weixin.qq.com/v3/certificates';
-    // JSAPI下单
-    private static $jsapiUrl = 'https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi';
-
-    // 当前请求的 Host: 头部的内容
-    private static $referer = '';
     // 支付完整配置
     private static $config = array(
         'xcxid'         => '', // 小程序appid
@@ -65,7 +57,6 @@ class Wechat
      */
     public function __construct($config=NULL, $referer=NULL){
         $config && self::$config = array_merge(self::$config, $config);
-        self::$referer = $referer ? $referer : $_SERVER['HTTP_HOST'];
     }
 
     /**
@@ -74,120 +65,94 @@ class Wechat
      * @param  boolean $type  [区分是否是小程序，是则传 true]
      * @return [type]         [description]
      * $order = array(
-     *      'body'          => '', // 产品描述
-     *      'total_fee'     => '', // 订单金额（分）
-     *      'out_trade_no'  => '', // 订单编号
-     *      'trade_type'    => '', // 类型：JSAPI--JSAPI支付（或小程序支付）、NATIVE--Native支付、APP--app支付，MWEB--H5支付
+     *      'body'         => '', // 产品描述
+     *      'order_sn'     => '', // 订单编号
+     *      'total_amount' => '', // 订单金额（分）
      * );
      */
-    public static function unifiedOrder($order, $url)
+    public static function unifiedOrder($order, $type=false)
     {
         $config = array_filter(self::$config);
 
         // 获取配置项
         $params = array(
-            'appid'         => $config['xcxid'],
-            'mchid'         => $config['mchid'],
-            'scene_info'    => ['payer_client_ip' => self::get_ip()],
-            'notify_url'    => $config['notify_url']
+            'appid'         => $type ? $config['xcxid'] : $config['appid'], // 由微信生成的应用ID
+            'mchid'         => $config['mchid'], // 直连商户的商户号
+            'description'   => $order['body'], // 商品描述
+            'out_trade_no'  => (string)$order['order_sn'], // 商户系统内部订单号
+            'notify_url'    => $config['notify_url'], // 通知URL必须为直接可访问的URL
+            'amount'        => ['total' => $order['total_amount'], 'currency' => 'CNY'], // 订单金额信息
         );
 
-        !empty($config['sub_mch_id']) && $params['sub_mch_id'] = $config['sub_mch_id'];
+        !empty($order['attach']) && $params['attach'] = $order['attach'];
 
-        $order['amount'] = ['total' => $order['total_amount']];
-        unset($order['total_amount']);
+        if (!in_array($order['type'], ['native'])) {
+            !empty($order['openid']) && $params['payer'] = ['openid' => $order['openid']];
+            $params['scene_info'] = ['payer_client_ip' => self::get_ip()];
+        }
 
-        $params = array_merge($order, $params); // 合并配置数据和订单数据
-        // $params['sign'] = self::makeSign($params); // 生成签名
+        if (in_array($order['type'], ['iOS', 'Android', 'Wap'])) {
+            $params['scene_info']['h5_info'] = ['type' => $order['type']];
+            $url = self::$transactionsUrl . 'h5'; // 拼接请求地址
+        } else {
+            $url = self::$transactionsUrl . strtolower($order['type']); // 拼接请求地址
+        }
 
-        $header = self::createAuthorization($url, $params, 'POST'); // 定义content-type为xml,注意是数组
-
+        $header = self::createAuthorization($url, $params, 'POST');
         $response = Http::post($url, json_encode($params), $header);
         $result = json_decode($response, true);
 
-        // dump($result);die;
         return $result;
     }
 
-        /**
-     * [xcxPay 获取jssdk需要用到的数据]
-     * @param  [type]  $order [订单信息数组]
-     * @param  boolean $type  [区分是否是小程序，默认 true]
-     * @return [type]         [description]
-     * $order = array(
-     *      'body'          => '', // 产品描述
-     *      'total_fee'     => '', // 订单金额（分）
-     *      'out_trade_no'  => '', // 订单编号
-     *      'openid'        => '', // 用户openid
-     * );
+    /**
+     * [query 查询订单]
+     * @param  [type]  $order_sn [订单编号]
+     * @param  boolean $type     [微信支付订单编号，是否是微信支付订单号]
+     * @return [type]            [description]
      */
-    public static function xcxPay($order=NULL)
+    public static function query($order_sn, $type = false)
     {
-        if(!is_array($order) || count($order) < 4){
-            die("数组数据信息缺失！");
-        }
-        // $order['trade_type'] = 'JSAPI'; // 小程序支付
+        $config = self::$config;
+        $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $order_sn . '?mchid=' . $config['mchid'];
+        $params = '';
 
-        $url = self::$jsapiUrl;
-        $order['payer'] = ['openid' => $order['openid']];
-        unset($order['openid']);
+        $header = self::createAuthorization($url, $params, 'GET');
+        $response = Http::get($url, $params, $header);
+        $result = json_decode($response, true);
 
-        $result = self::unifiedOrder($order, $url);
-        if (!empty($result['prepay_id'])) {
-            $data = array (
-                'appId'     => self::$config['xcxid'],
-                'timeStamp' => (string)time(),
-                'nonceStr'  => self::get_rand_str(32, 0, 1), // 随机32位字符串
-                'package'   => 'prepay_id='.$result['prepay_id'],
-            );
-            $data['paySign'] = self::makeSign($data);
-            $data['signType'] = 'RSA';
-            return $data; // 数据小程序客户端
-        } else {
-            if ($result['err_code_des'])
-                die($result['err_code_des']);
-            return false;
-        }
+        return $result;
     }
 
     /**
-     * [qrcodePay 微信扫码支付]
-     * @param  [type] $order [订单信息数组]
-     * @return [type]        [description]
-     * $order = array(
-     *      'body'          => '', // 产品描述
-     *      'total_fee'     => '', // 订单金额（分）
-     *      'out_trade_no'  => '', // 订单编号
-     * );
+     * [close 关闭订单]
+     * @param  [type] $order_sn [微信支付订单编号]
+     * @return [type]           [description]
      */
-    public static function qrcodePay($order=NULL)
+    public static function close($order_sn)
     {
-        if(!is_array($order) || count($order) < 3){
-            die("数组数据信息缺失！");
-        }
-        $order['product_id'] = $order['out_trade_no'] ?? time(); // Native支付
-        $order['trade_type'] = 'NATIVE'; // Native支付
-        $result = self::unifiedOrder($order);
-        $decodeurl = urldecode($result['code_url']);
-        return $decodeurl;
+        $config = self::$config;
+        $url = self::$transactionsUrl . 'out-trade-no/' . $order_sn . '/close';
+        $params['mchid'] = $config['mchid'];
+
+        $header = self::createAuthorization($url, $params, 'POST');
+        $response = Http::post($url, json_encode($params), $header);
+        $result = json_decode($response, true);
+
+        return true;
     }
 
     /**
-     * [jsPay 获取jssdk需要用到的数据]
+     * [js 获取jssdk需要用到的数据]
      * @param  [type] $order [订单信息数组]
      * @return [type]        [description]
-     * $order = array(
-     *      'body'          => '', // 产品描述
-     *      'total_fee'     => '', // 订单金额（分）
-     *      'out_trade_no'  => '', // 订单编号
-     * );
      */
-    public static function jsPay($order=NULL, $code=NULL){
-        $config=self::$config;
+    public static function js($order=[], $code=NULL){
+        $config = self::$config;
         if (!is_array($order) || count($order) < 3)
-            die("数组数据信息缺失！");
+            die("订单数组信息缺失！");
         if (count($order) == 4) {
-            $data = self::xcxPay($order, false); // 获取支付相关信息(获取非小程序信息)
+            $data = self::xcx($order, false, false); // 获取支付相关信息(获取非小程序信息)
             return $data;
         }
         $code = $_GET['code'] ?? '';
@@ -211,7 +176,7 @@ class Wechat
             $result = json_decode($response, true);
 
             $order['openid'] = $result['openid']; // 获取到的openid
-            $data = self::xcxPay($order, false); // 获取支付相关信息(获取非小程序信息)
+            $data = self::xcx($order, false, false); // 获取支付相关信息(获取非小程序信息)
 
             $url = $config['redirect_url'] ?? $redirectUri;
             $url .= '?data=' . json_encode($data);
@@ -221,73 +186,100 @@ class Wechat
     }
 
     /**
-     * [weixinH5 微信H5支付]
-     * @param  [type] $order [订单信息数组]
-     * @return [type]        [description]
-     * $order = array(
-     *      'body'          => '', // 产品描述
-     *      'total_fee'     => '', // 订单金额（分）
-     *      'out_trade_no'  => '', // 订单编号
-     * );
+     * [app 获取APP支付需要用到的数据]
+     * @param  [type]  $order [订单信息数组]
+     * @return [type]         [description]
      */
-    public static function h5Pay($order=NULL)
+    public static function app($order=[], $log=false)
     {
-        if(!is_array($order) || count($order) < 3){
-            die("数组数据信息缺失！");
+        if(empty($order['order_sn']) || empty($order['total_amount']) || empty($order['body'])){
+            die("订单数组信息缺失！");
         }
-        $order['trade_type'] = 'MWEB'; // H5支付
-        $result = self::unifiedOrder($order);
 
-        if ($result['return_code']=='SUCCESS' && $result['result_code']=='SUCCESS')
-            return $result['mweb_url']; // 返回链接让用户点击跳转
-        if ($result['err_code_des'])
-            die($result['err_code_des']);
-        return false;
+        $order['type'] = 'app'; // 获取订单类型，用户拼接请求地址
+        $result = self::unifiedOrder($order, true);
+        if (!empty($result['prepay_id'])) {
+            $data = array (
+                'appId'     => self::$config['xcxid'], // 微信开放平台审核通过的移动应用appid
+                'timeStamp' => (string)time(),
+                'nonceStr'  => self::get_rand_str(32, 0, 1), // 随机32位字符串
+                'prepayid'  => $result['prepay_id'],
+            );
+            $data['paySign'] = self::makeSign($data);
+            $data['partnerid'] = $config['mchid'];
+            $data['package'] = 'Sign=WXPay';
+            return $data; // 数据小程序客户端
+        } else {
+            return $log ? $result : false;
+        }
     }
 
     /**
-     * [refund 微信支付退款]
-     * @param  [type] $order [订单信息]
-     * @param  [type] $type  [是否是小程序]
-     * $order = array(
-     *      'body'          => '', // 退款原因
-     *      'total_fee'     => '', // 退款金额（分）
-     *      'out_trade_no'  => '', // 订单编号
-     *      'transaction_id'=> '', // 微信订单号
-     * );
+     * [h5 微信H5支付]
+     * @param  [type] $order [订单信息数组]
+     * @return [type]        [description]
      */
-    public static function refund($order, $type=NULL)
+    public static function h5($order=[], $log=false)
     {
-        $config = self::$config;
-        $data = array(
-            'appid'         => empty($type) ? $config['appid'] : $config['xcxappid'] ,
-            'mch_id'        => $config['mch_id'],
-            'nonce_str'     => 'test',
-            'total_fee'     => $order['total_fee'],         //订单金额     单位 转为分
-            'refund_fee'    => $order['total_fee'],         //退款金额 单位 转为分
-            'sign_type'     => 'MD5',                       //签名类型 支持HMAC-SHA256和MD5，默认为MD5
-            'transaction_id'=> $order['transaction_id'],    //微信订单号
-            'out_trade_no'  => $order['out_trade_no'],      //商户订单号
-            'out_refund_no' => $order['out_trade_no'],      //商户退款单号
-            'refund_desc'   => $order['body'],              //退款原因（选填）
-        );
-        // $unified['sign'] = self::makeSign($unified, $config['KEY']);
-        $sign = self::makeSign($data);
-        $data['sign'] = $sign;
-        $xml = self::array_to_xml($data);
-        $cert = [
-            'cert' => $config['cert_client'],
-            'key' => $config['cert_key'],
-        ];
-        $response = Http::post(self::$refundUrl, $xml, ['Content-type: text/xml'], $cert);
-        $result = self::xml_to_array($response);
-        // 显示错误信息
-        if ($result['return_code']=='FAIL') {
-            die($result['return_msg']);
+        if(empty($order['order_sn']) || empty($order['total_amount']) || empty($order['body']) || empty($order['type']) || !in_array(strtolower($order['type']), ['ios', 'android', 'wap'])){
+            die("订单数组信息缺失！");
         }
-        $result['sign'] = $sign;
-        $result['nonce_str'] = 'test';
-        return $result;
+        $result = self::unifiedOrder($order);
+        if (!empty($result['h5_url'])) {
+            return $result['h5_url']; // 返回链接让用户点击跳转
+        } else {
+            return $log ? $result : false;
+        }
+    }
+
+    /**
+     * [xcx 获取jssdk需要用到的数据]
+     * @param  [type]  $order [订单信息数组]
+     * @param  boolean $log   [description]
+     * @param  boolean $type  [区分是否是小程序，默认 true]
+     * @return [type]         [description]
+     */
+    public static function xcx($order=[], $log=false, $type=true)
+    {
+        if(empty($order['order_sn']) || empty($order['total_amount']) || empty($order['body']) || empty($order['openid'])){
+            die("订单数组信息缺失！");
+        }
+
+        $order['type'] = 'jsapi'; // 获取订单类型，用户拼接请求地址
+        $result = self::unifiedOrder($order, $type);
+        if (!empty($result['prepay_id'])) {
+            $data = array (
+                'appId'     => self::$config['xcxid'],
+                'timeStamp' => (string)time(),
+                'nonceStr'  => self::get_rand_str(32, 0, 1), // 随机32位字符串
+                'package'   => 'prepay_id='.$result['prepay_id'],
+            );
+            $data['paySign'] = self::makeSign($data);
+            $data['signType'] = 'RSA';
+            return $data; // 数据小程序客户端
+        } else {
+            return $log ? $result : false;
+        }
+    }
+
+    /**
+     * [scan 微信扫码支付]
+     * @param  [type] $order [订单信息数组]
+     * @return [type]        [description]
+     */
+    public static function scan($order=[], $log=false)
+    {
+        if(empty($order['order_sn']) || empty($order['total_amount']) || empty($order['body'])){
+            die("订单数组信息缺失！");
+        }
+        $order['type'] = 'native'; // Native支付
+        $result = self::unifiedOrder($order);
+
+        if (!empty($result['code_url'])) {
+            return urldecode($result['code_url']); // 返回链接让用户点击跳转
+        } else {
+            return $log ? $result : false;
+        }
     }
 
     /**
@@ -296,19 +288,74 @@ class Wechat
      */
     public static function notify()
     {
-        $xml = file_get_contents('php://input', 'r'); // 获取xml
-        if (!$xml)
-            die('暂无回调信息');
-        $data = self::xml_to_array($xml); // 转成php数组
-        $data_sign = $data['sign']; // 保存原sign
-        unset($data['sign']); // sign不参与签名
-        $sign = self::makeSign($data);
-        // 判断签名是否正确  判断支付状态
-        if ($sign===$data_sign && $data['return_code']=='SUCCESS' && $data['result_code']=='SUCCESS') {
-            return $data;
-        } else {
+        $response = $_POST;
+        $result = json_decode($response, true);
+        if ($result['event_type'] != 'TRANSACTION.SUCCESS') {
             return false;
         }
+
+        $associatedData = $result['resource']['associated_data'];
+        $nonceStr = $result['resource']['nonce'];
+        $ciphertext = $result['resource']['ciphertext'];
+
+        $data = self::decryptToString($associatedData, $nonceStr, $ciphertext);
+        return $data;
+    }
+
+    /**
+     * [refund 微信支付退款]
+     * @param  [type] $order [订单信息]
+     * @param  [type] $type  [是否是小程序]
+     */
+    public static function refund($order)
+    {
+        $config = self::$config;
+        if(empty($order['refund_sn']) || empty($order['refund_amount']) || (empty($order['order_sn']) && empty($order['transaction_id']))){
+            die("订单数组信息缺失！");
+        }
+
+        $params = array(
+            'out_refund_no' => (string)$order['refund_sn'], // 商户退款单号
+            'funds_account' => 'AVAILABLE', // 退款资金来源
+            'amount' => [
+                    'refund' => $order['refund_amount'],
+                    'currency' => 'CNY',
+                ]
+        );
+
+        if (!empty($order['transaction_id'])) {
+            $params['transaction_id'] = $order['transaction_id'];
+            $orderDetail = self::query($order['transaction_id'], true);
+        } else {
+            $params['out_trade_no'] = $order['order_sn'];
+            $orderDetail = self::query($order['order_sn']);
+        }
+        $params['amount']['total'] = $orderDetail['amount']['total'];
+        !empty($order['reason']) && $params['reason'] = $order['reason'];
+
+        $url = self::$refundUrl;
+        $header = self::createAuthorization($url, $params, 'POST');
+        $response = Http::post($url, json_encode($params), $header);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
+     * [queryRefund 查询退款]
+     * @param  [type] $refund_sn [退款单号]
+     * @return [type]            [description]
+     */
+    public static function queryRefund($refund_sn, $type = false)
+    {
+        $url = self::$refundUrl . '/' . $refund_sn;
+        $params = '';
+
+        $header = self::createAuthorization($url, $params, 'GET');
+        $response = Http::get($url, $params, $header);
+        $result = json_decode($response, true);
+
+        return $result;
     }
 
     /**
@@ -316,24 +363,53 @@ class Wechat
      */
     public static function success()
     {
-        $str = '<xml><return_code><![CDATA[SUCCESS]]></return_code><return_msg><![CDATA[OK]]></return_msg></xml>';
+        $str = json_encode(['code'=>'SUCCESS', 'message'=>'成功']);
         die($str);
     }
 
     /**
-     * [error 通知支付状态]
+     * [decryptToString 证书和回调报文解密]
+     * @param  [type] $associatedData [附加数据包（可能为空）]
+     * @param  [type] $nonceStr       [加密使用的随机串初始化向量]
+     * @param  [type] $ciphertext     [Base64编码后的密文]
+     * @return [type]                 [description]
      */
-    public static function error()
+    public static function decryptToString($associatedData, $nonceStr, $ciphertext)
     {
-        $str = '<xml><return_code><![CDATA[FAIL]]></return_code><return_msg><![CDATA[签名失败]]></return_msg></xml>';
-        die($str);
+        $config = self::$config;
+
+        $ciphertext = base64_decode($ciphertext);
+        if (strlen($ciphertext) <= 16) {
+            return false;
+        }
+
+        // ext-sodium (default installed on >= PHP 7.2)
+        if (function_exists('sodium_crypto_aead_aes256gcm_is_available') && sodium_crypto_aead_aes256gcm_is_available()) {
+            return sodium_crypto_aead_aes256gcm_decrypt($ciphertext, $associatedData, $nonceStr, $config['key']);
+        }
+
+        // ext-libsodium (need install libsodium-php 1.x via pecl)
+        if (function_exists('\Sodium\crypto_aead_aes256gcm_is_available') && \Sodium\crypto_aead_aes256gcm_is_available()) {
+            return \Sodium\crypto_aead_aes256gcm_decrypt($ciphertext, $associatedData, $nonceStr, $config['key']);
+        }
+
+        // openssl (PHP >= 7.1 support AEAD)
+        if (PHP_VERSION_ID >= 70100 && in_array('aes-256-gcm', openssl_get_cipher_methods())) {
+            $ctext = substr($ciphertext, 0, -self::AUTH_TAG_LENGTH_BYTE);
+            $authTag = substr($ciphertext, -self::AUTH_TAG_LENGTH_BYTE);
+
+            return openssl_decrypt($ctext, 'aes-256-gcm', $config['key'], OPENSSL_RAW_DATA, $nonceStr, $authTag, $associatedData);
+        }
+
+        throw new \RuntimeException('AEAD_AES_256_GCM需要PHP 7.1以上或者安装libsodium-php');
     }
 
     /**
-     * [makeSign 生成签名]
-     * 本方法不覆盖sign成员变量，如要设置签名需要调用SetSign方法赋值
-     * @param  [type] $data [description]
-     * @return [type]       [description]
+     * [createAuthorization 获取接口授权header头信息]
+     * @param  [type] $url    [请求地址]
+     * @param  array  $data   [请求参数]
+     * @param  string $method [请求方式]
+     * @return [type]         [description]
      */
     //生成v3 Authorization
     protected static function createAuthorization($url, $data=[], $method='POST'){
@@ -368,6 +444,11 @@ class Wechat
         return $header;
     }
 
+    /**
+     * [makeSign 生成秘钥]
+     * @param  [type] $data [加密数据]
+     * @return [type]       [description]
+     */
     public static function makeSign($data){
         $config = self::$config;
         if (!in_array('sha256WithRSAEncryption', \openssl_get_md_methods(true))) {
@@ -391,7 +472,7 @@ class Wechat
      * @param  integer $includenumber [是否包含数字]
      * @return [type]                 [description]
      */
-    public static function get_rand_str($randLength=6,$addtime=1,$includenumber=0)
+    public static function get_rand_str($randLength=6, $addtime=0, $includenumber=1)
     {
         if ($includenumber)
             $chars='abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQEST123456789';
