@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-12T15:09:54+08:00
+ * @Last Modified time: 2021-06-13T14:54:22+08:00
  */
 namespace fengkui\Pay;
 error_reporting(E_ALL);
@@ -13,6 +13,7 @@ ini_set('display_errors', '1');
 ini_set('date.timezone','Asia/Shanghai');
 
 use Exception;
+use RuntimeException;
 use fengkui\Supports\Http;
 
 /**
@@ -21,15 +22,18 @@ use fengkui\Supports\Http;
  */
 class Wechat
 {
+    const AUTH_TAG_LENGTH_BYTE = 16;
+
+    // 平台证书公钥
+    private static $publicKey = [];
+
     // 新版相关接口
     // GET 获取平台证书列表
     private static $certificatesUrl = 'https://api.mch.weixin.qq.com/v3/certificates';
     // 统一下单地址
     private static $transactionsUrl = 'https://api.mch.weixin.qq.com/v3/pay/transactions/';
-
     // 申请退款
     private static $refundUrl = 'https://api.mch.weixin.qq.com/v3/refund/domestic/refunds';
-
     // 静默授权，获取code
     private static $authorizeUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize';
     // 通过code获取access_token以及openid
@@ -40,7 +44,7 @@ class Wechat
         'xcxid'         => '', // 小程序appid
         'appid'         => '', // 微信支付appid
         'mchid'         => '', // 微信支付 mch_id 商户收款账号
-        'key'           => '', // 微信支付 key
+        'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过）
         'appsecret'     => '', // 公众帐号 secert (公众号支付获取openid使用)
 
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
@@ -48,7 +52,8 @@ class Wechat
 
         'serial_no'     => '', // 证书序列号
         'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
-        'cert_key'      => './cert/apiclient_key.pem', // 证书（退款，红包时使用）
+        'cert_key'      => './cert/apiclient_key.pem', // 商户私钥（Api安全中下载）
+        'public_key'    => './cert/public_key.pem', // 平台公钥（调动证书列表，自动生成）
     );
 
     /**
@@ -200,7 +205,7 @@ class Wechat
         $result = self::unifiedOrder($order, true);
         if (!empty($result['prepay_id'])) {
             $data = array (
-                'appId'     => self::$config['xcxid'], // 微信开放平台审核通过的移动应用appid
+                'appId'     => self::$config['appid'], // 微信开放平台审核通过的移动应用appid
                 'timeStamp' => (string)time(),
                 'nonceStr'  => self::get_rand_str(32, 0, 1), // 随机32位字符串
                 'prepayid'  => $result['prepay_id'],
@@ -286,20 +291,35 @@ class Wechat
      * [notify 回调验证]
      * @return [array] [返回数组格式的notify数据]
      */
-    public static function notify()
+    public static function notify($verifySign = false)
     {
-        $response = $_POST;
-        $result = json_decode($response, true);
-        if ($result['event_type'] != 'TRANSACTION.SUCCESS') {
+        $config = self::$config;
+        $result = file_get_contents('php://input', 'r');
+        if (empty($result) || $result['event_type'] != 'TRANSACTION.SUCCESS' || $result['summary'] != '支付成功') {
             return false;
+        }
+
+        if ($verifySign) {
+            $server = $_SERVER;
+            // $server = json_decode($server, true);
+            $data = [
+                'TIMESTAMP' => $server['HTTP_WECHATPAY_TIMESTAMP'],
+                'NONCE' => $server['HTTP_WECHATPAY_NONCE'],
+                'data' => json_encode($result),
+            ];
+            $verifySign = self::verifySign($data, trim($server['HTTP_WECHATPAY_SIGNATURE']), trim($server['HTTP_WECHATPAY_SERIAL']));
+            if (!$verifySign) {
+                die("签名验证失败！");
+            }
         }
 
         $associatedData = $result['resource']['associated_data'];
         $nonceStr = $result['resource']['nonce'];
         $ciphertext = $result['resource']['ciphertext'];
 
+        // dump($result);die;
         $data = self::decryptToString($associatedData, $nonceStr, $ciphertext);
-        return $data;
+        return json_decode($data, true);
     }
 
     /**
@@ -368,43 +388,6 @@ class Wechat
     }
 
     /**
-     * [decryptToString 证书和回调报文解密]
-     * @param  [type] $associatedData [附加数据包（可能为空）]
-     * @param  [type] $nonceStr       [加密使用的随机串初始化向量]
-     * @param  [type] $ciphertext     [Base64编码后的密文]
-     * @return [type]                 [description]
-     */
-    public static function decryptToString($associatedData, $nonceStr, $ciphertext)
-    {
-        $config = self::$config;
-
-        $ciphertext = base64_decode($ciphertext);
-        if (strlen($ciphertext) <= 16) {
-            return false;
-        }
-
-        // ext-sodium (default installed on >= PHP 7.2)
-        if (function_exists('sodium_crypto_aead_aes256gcm_is_available') && sodium_crypto_aead_aes256gcm_is_available()) {
-            return sodium_crypto_aead_aes256gcm_decrypt($ciphertext, $associatedData, $nonceStr, $config['key']);
-        }
-
-        // ext-libsodium (need install libsodium-php 1.x via pecl)
-        if (function_exists('\Sodium\crypto_aead_aes256gcm_is_available') && \Sodium\crypto_aead_aes256gcm_is_available()) {
-            return \Sodium\crypto_aead_aes256gcm_decrypt($ciphertext, $associatedData, $nonceStr, $config['key']);
-        }
-
-        // openssl (PHP >= 7.1 support AEAD)
-        if (PHP_VERSION_ID >= 70100 && in_array('aes-256-gcm', openssl_get_cipher_methods())) {
-            $ctext = substr($ciphertext, 0, -self::AUTH_TAG_LENGTH_BYTE);
-            $authTag = substr($ciphertext, -self::AUTH_TAG_LENGTH_BYTE);
-
-            return openssl_decrypt($ctext, 'aes-256-gcm', $config['key'], OPENSSL_RAW_DATA, $nonceStr, $authTag, $associatedData);
-        }
-
-        throw new \RuntimeException('AEAD_AES_256_GCM需要PHP 7.1以上或者安装libsodium-php');
-    }
-
-    /**
      * [createAuthorization 获取接口授权header头信息]
      * @param  [type] $url    [请求地址]
      * @param  array  $data   [请求参数]
@@ -445,11 +428,12 @@ class Wechat
     }
 
     /**
-     * [makeSign 生成秘钥]
+     * [makeSign 生成签名]
      * @param  [type] $data [加密数据]
      * @return [type]       [description]
      */
-    public static function makeSign($data){
+    public static function makeSign($data)
+    {
         $config = self::$config;
         if (!in_array('sha256WithRSAEncryption', \openssl_get_md_methods(true))) {
             throw new \RuntimeException("当前PHP环境不支持SHA256withRSA");
@@ -459,10 +443,126 @@ class Wechat
         foreach ($data as $value) {
             $message .= $value . "\n";
         }
-        //生成签名
-        openssl_sign($message, $raw_sign, openssl_get_privatekey(file_get_contents($config['cert_key'])), 'sha256WithRSAEncryption');
-        $sign = base64_encode($raw_sign);
+        // 商户私钥
+        $private_key = self::getPrivateKey($config['cert_key']);
+        // 生成签名
+        openssl_sign($message, $sign, $private_key, 'sha256WithRSAEncryption');
+        $sign = base64_encode($sign);
         return $sign;
+    }
+
+    /**
+     * [verifySign 验证签名]
+     * @param  [type] $data   [description]
+     * @param  [type] $sign   [description]
+     * @param  [type] $serial [description]
+     * @return [type]         [description]
+     */
+    public static function verifySign($data, $sign, $serial)
+    {
+        $config = self::$config;
+        if (!in_array('sha256WithRSAEncryption', \openssl_get_md_methods(true))) {
+            throw new \RuntimeException("当前PHP环境不支持SHA256withRSA");
+        }
+        $sign = base64_decode($sign);
+        // 拼接生成签名所需的字符串
+        $message = '';
+        foreach ($data as $value) {
+            $message .= $value . "\n";
+        }
+
+        // 获取证书相关信息
+        if (empty(self::$publicKey[$serial])) {
+            self::certificates();
+        }
+        // 平台公钥
+        $public_key = self::getPublicKey($config['public_key']); //平台公钥
+
+        // 验证签名
+        $recode = openssl_verify($message, $sign, $public_key, 'sha256WithRSAEncryption');
+
+        return $recode == 1 ? true : false;
+    }
+
+    //获取私钥
+    public static function getPrivateKey($filepath)
+    {
+        return openssl_pkey_get_private(file_get_contents($filepath));
+    }
+
+    //获取公钥
+    public static function getPublicKey($filepath)
+    {
+        return openssl_pkey_get_public(file_get_contents($filepath));
+    }
+
+    /**
+     * [certificates 获取证书]
+     * @return [type] [description]
+     */
+    public static function certificates()
+    {
+        $url = self::$certificatesUrl;
+        $config = self::$config;
+        $params = '';
+
+        $header = self::createAuthorization($url, $params, 'GET');
+        $response = Http::get($url, $params, $header);
+        $result = json_decode($response, true);
+        if (empty($result['data'])) {
+            throw new RuntimeException("[" . $result['code'] . "] " . $result['message']);
+        }
+        foreach ($result['data'] as $key => $certificate) {
+            $publicKey = self::decryptToString(
+                $certificate['encrypt_certificate']['associated_data'],
+                $certificate['encrypt_certificate']['nonce'],
+                $certificate['encrypt_certificate']['ciphertext']
+            );
+            if ($key == 0) {
+                file_put_contents($config['public_key'], $publicKey);
+            }
+            self::$publicKey[$certificate['serial_no']] = $publicKey;
+        }
+        return self::$publicKey;
+    }
+
+    /**
+     * [decryptToString 证书和回调报文解密]
+     * @param  [type] $associatedData [附加数据包（可能为空）]
+     * @param  [type] $nonceStr       [加密使用的随机串初始化向量]
+     * @param  [type] $ciphertext     [Base64编码后的密文]
+     * @return [type]                 [description]
+     */
+    public static function decryptToString($associatedData, $nonceStr, $ciphertext)
+    {
+        $config = self::$config;
+        $ciphertext = base64_decode($ciphertext);
+        if (strlen($ciphertext) <= self::AUTH_TAG_LENGTH_BYTE) {
+            return false;
+        }
+
+        // ext-sodium (default installed on >= PHP 7.2)
+        if (function_exists('\sodium_crypto_aead_aes256gcm_is_available') &&
+            \sodium_crypto_aead_aes256gcm_is_available()) {
+            return \sodium_crypto_aead_aes256gcm_decrypt($ciphertext, $associatedData, $nonceStr, $config['key']);
+        }
+
+        // ext-libsodium (need install libsodium-php 1.x via pecl)
+        if (function_exists('\Sodium\crypto_aead_aes256gcm_is_available') &&
+            \Sodium\crypto_aead_aes256gcm_is_available()) {
+            return \Sodium\crypto_aead_aes256gcm_decrypt($ciphertext, $associatedData, $nonceStr, $config['key']);
+        }
+
+        // openssl (PHP >= 7.1 support AEAD)
+        if (PHP_VERSION_ID >= 70100 && in_array('aes-256-gcm', \openssl_get_cipher_methods())) {
+            $ctext = substr($ciphertext, 0, -self::AUTH_TAG_LENGTH_BYTE);
+            $authTag = substr($ciphertext, -self::AUTH_TAG_LENGTH_BYTE);
+
+            return \openssl_decrypt($ctext, 'aes-256-gcm', $config['key'], \OPENSSL_RAW_DATA, $nonceStr,
+                $authTag, $associatedData);
+        }
+
+        throw new \RuntimeException('AEAD_AES_256_GCM需要PHP 7.1以上或者安装libsodium-php');
     }
 
     /** fengkui.net
@@ -478,13 +578,13 @@ class Wechat
             $chars='abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQEST123456789';
         $chars='abcdefghijklmnopqrstuvwxyz';
 
-        $len=strlen($chars);
-        $randStr='';
-        for ($i=0;$i<$randLength;$i++){
-            $randStr .= $chars[rand(0,$len-1)];
+        $len = strlen($chars);
+        $randStr = '';
+        for ($i=0; $i<$randLength; $i++){
+            $randStr .= $chars[rand(0, $len-1)];
         }
         $tokenvalue = $randStr;
-        $addtime && $tokenvalue=$randStr.time();
+        $addtime && $tokenvalue = $randStr . time();
         return $tokenvalue;
     }
 
