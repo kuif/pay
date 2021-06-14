@@ -3,14 +3,9 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-13T14:54:22+08:00
+ * @Last Modified time: 2021-06-14T16:18:12+08:00
  */
 namespace fengkui\Pay;
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
-
-// 定义时区
-ini_set('date.timezone','Asia/Shanghai');
 
 use Exception;
 use RuntimeException;
@@ -89,7 +84,12 @@ class Wechat
             'amount'        => ['total' => $order['total_amount'], 'currency' => 'CNY'], // 订单金额信息
         );
 
-        !empty($order['attach']) && $params['attach'] = $order['attach'];
+        !empty($order['attach']) && $params['attach'] = $order['attach']; // 附加数据
+        if (!empty($order['time_expire'])) { // 订单失效时间
+            preg_match('/[年\/-]/', $order['time_expire']) && $order['time_expire'] = strtotime($order['time_expire']);
+            $time = $order['time_expire'] > time() ? $order['time_expire'] : $order['time_expire'] + time();
+            $params['time_expire'] = date(DATE_ATOM, $time);
+        }
 
         if (!in_array($order['type'], ['native'])) {
             !empty($order['openid']) && $params['payer'] = ['openid' => $order['openid']];
@@ -294,7 +294,8 @@ class Wechat
     public static function notify($verifySign = false)
     {
         $config = self::$config;
-        $result = file_get_contents('php://input', 'r');
+        $response = file_get_contents('php://input', 'r');
+        $result = json_decode($response, true);
         if (empty($result) || $result['event_type'] != 'TRANSACTION.SUCCESS' || $result['summary'] != '支付成功') {
             return false;
         }
