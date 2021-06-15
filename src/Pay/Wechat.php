@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-14T16:18:12+08:00
+ * @Last Modified time: 2021-06-15T15:49:49+08:00
  */
 namespace fengkui\Pay;
 
@@ -25,7 +25,7 @@ class Wechat
     // 新版相关接口
     // GET 获取平台证书列表
     private static $certificatesUrl = 'https://api.mch.weixin.qq.com/v3/certificates';
-    // 统一下单地址
+    // 统一下订单管理
     private static $transactionsUrl = 'https://api.mch.weixin.qq.com/v3/pay/transactions/';
     // 申请退款
     private static $refundUrl = 'https://api.mch.weixin.qq.com/v3/refund/domestic/refunds';
@@ -112,14 +112,14 @@ class Wechat
 
     /**
      * [query 查询订单]
-     * @param  [type]  $order_sn [订单编号]
-     * @param  boolean $type     [微信支付订单编号，是否是微信支付订单号]
-     * @return [type]            [description]
+     * @param  [type]  $orderSn [订单编号]
+     * @param  boolean $type    [微信支付订单编号，是否是微信支付订单号]
+     * @return [type]           [description]
      */
-    public static function query($order_sn, $type = false)
+    public static function query($orderSn, $type = false)
     {
         $config = self::$config;
-        $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $order_sn . '?mchid=' . $config['mchid'];
+        $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $orderSn . '?mchid=' . $config['mchid'];
         $params = '';
 
         $header = self::createAuthorization($url, $params, 'GET');
@@ -131,13 +131,13 @@ class Wechat
 
     /**
      * [close 关闭订单]
-     * @param  [type] $order_sn [微信支付订单编号]
-     * @return [type]           [description]
+     * @param  [type] $orderSn [微信支付订单编号]
+     * @return [type]          [description]
      */
-    public static function close($order_sn)
+    public static function close($orderSn)
     {
         $config = self::$config;
-        $url = self::$transactionsUrl . 'out-trade-no/' . $order_sn . '/close';
+        $url = self::$transactionsUrl . 'out-trade-no/' . $orderSn . '/close';
         $params['mchid'] = $config['mchid'];
 
         $header = self::createAuthorization($url, $params, 'POST');
@@ -364,12 +364,12 @@ class Wechat
 
     /**
      * [queryRefund 查询退款]
-     * @param  [type] $refund_sn [退款单号]
-     * @return [type]            [description]
+     * @param  [type] $refundSn [退款单号]
+     * @return [type]           [description]
      */
-    public static function queryRefund($refund_sn, $type = false)
+    public static function queryRefund($refundSn, $type = false)
     {
-        $url = self::$refundUrl . '/' . $refund_sn;
+        $url = self::$refundUrl . '/' . $refundSn;
         $params = '';
 
         $header = self::createAuthorization($url, $params, 'GET');
@@ -384,8 +384,8 @@ class Wechat
      */
     public static function success()
     {
-        $str = json_encode(['code'=>'SUCCESS', 'message'=>'成功']);
-        die($str);
+        $str = ['code'=>'SUCCESS', 'message'=>'成功'];
+        die(json_encode($str));
     }
 
     /**

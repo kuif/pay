@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-09-27T16:28:31+08:00
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-12T15:15:43+08:00
+ * @Last Modified time: 2021-06-15T16:53:07+08:00
  */
 namespace fengkui\Pay;
 
@@ -14,6 +14,9 @@ use fengkui\Supports\Http;
  */
 class Baidu
 {
+    // 统一订单管理URL
+    private static $paymentUrl = 'https://openapi.baidu.com/rest/2.0/smartapp/pay/paymentservice/';
+
     // 支付相关配置
     private static $config = array(
         'deal_id'       => '', // 百度收银台的财务结算凭证
@@ -41,7 +44,7 @@ class Baidu
      *      'order_sn'      => '', // 订单编号
      * );
      */
-    public static function xcxPay($order)
+    public static function xcx($order)
     {
         if(!is_array($order) || count($order) < 3)
             die("数组数据信息缺失！");
@@ -68,11 +71,6 @@ class Baidu
                             [ "leftCol" => "订单名称", "rightCol"   => $order['body'] ],
                             [ "leftCol" => "数量", "rightCol" => "1" ],
                             [ "leftCol" => "订单金额", "rightCol"   => $order['total_amount'] ]
-                        ),
-                        array(
-                            [ "leftCol" => "服务地址", "rightCol" => "北京市海淀区上地十街10号百度大厦" ],
-                            [ "leftCol" => "服务时间", "rightCol" => "2018/10/29 14:51" ],
-                            [ "leftCol" => "服务人员", "rightCol" => "百度App" ]
                         )
                     )
                 ),
@@ -97,13 +95,56 @@ class Baidu
     }
 
     /**
+     * [find 查询订单]
+     * @param  [type] $orderSn     [开发者订单]
+     * @param  [type] $accessToken [access_token]
+     * @return [type]              [description]
+     */
+    public static function find($orderSn, $accessToken)
+    {
+        $config = self::$config;
+        $url = self::$paymentUrl . 'findByTpOrderId';
+        $params = [
+            'access_token'  => $accessToken, // 获取开发者服务权限说明
+            'tpOrderId' => $orderSn, // 开发者订单
+            'pmAppKey'  => $config['app_key'], // 调起百度收银台的支付服务
+        ];
+        $response = Http::get($url, $params);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
+     * [cancel 关闭订单]
+     * @param  [type] $orderSn     [开发者订单]
+     * @param  [type] $accessToken [access_token]
+     * @return [type]              [description]
+     */
+    public static function cancel($orderSn, $accessToken)
+    {
+        $config = self::$config;
+        $url = self::$paymentUrl . 'cancelOrder';
+        $params = [
+            'access_token'  => $accessToken, // 获取开发者服务权限说明
+            'tpOrderId' => $orderSn, // 开发者订单
+            'pmAppKey'  => $config['app_key'], // 调起百度收银台的支付服务
+        ];
+        $response = Http::get($url, $params);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
      * [refund baidu支付退款]
      * @param  [type] $order [订单信息]
      * @param  [type] $type  [退款类型]
      * $order = array(
-     *      'body'          => '', // 退款原因
-     *      'total_amount'  => '', // 退款金额（分）
      *      'order_sn'      => '', // 订单编号
+     *      'refund_sn'     => '', // 退款编号
+     *      'refund_amount' => '', // 退款金额（分）
+     *      'body'          => '', // 退款原因
      *      'access_token'  => '', // 获取开发者服务权限说明
      *      'order_id'      => '', // 百度收银台订单 ID
      *      'user_id'       => '', // 百度收银台用户 id
@@ -115,17 +156,19 @@ class Baidu
 
         $params = array(
             'access_token'      => $order['access_token'], // 获取开发者服务权限说明
-            'applyRefundMoney'  => $order['total_amount'], // 退款金额，单位：分。
-            'bizRefundBatchId'  => $order['order_sn'], // 开发者退款批次
+            // 'applyRefundMoney'  => $order['refund_amount'], // 退款金额，单位：分。
+            'bizRefundBatchId'  => $order['refund_sn'], // 开发者退款批次
             'isSkipAudit'       => 1, // 是否跳过审核，不需要百度请求开发者退款审核请传 1，默认为0； 0：不跳过开发者业务方审核；1：跳过开发者业务方审核。
             'orderId'           => $order['order_id'], // 百度收银台订单 ID
             'refundReason'      => $order['body'], // 退款原因
             'refundType'        => $type, // 退款类型 1：用户发起退款；2：开发者业务方客服退款；3：开发者服务异常退款。
             'tpOrderId'         => $order['order_sn'], // 开发者订单 ID
             'userId'            => $order['user_id'], // 百度收银台用户 id
+            'pmAppKey'          => $config['app_key'], // 调起百度收银台的支付服务
         );
+        !empty($order['refund_amount']) && $params['applyRefundMoney'] = $order['refund_amount'];
 
-        $url = 'https://openapi.baidu.com/rest/2.0/smartapp/pay/paymentservice/applyOrderRefund';
+        $url = self::$paymentUrl . 'applyOrderRefund';
         $response = Http::post($url, $params);
         $result = json_decode($response, true);
         // // 显示错误信息
@@ -133,6 +176,28 @@ class Baidu
         //     return false;
         //     // die($result['msg']);
         // }
+        return $result;
+    }
+
+    /**
+     * [findRefund 查询退款订单]
+     * @param  [type] $orderSn     [开发者订单]
+     * @param  [type] $accessToken [access_token]
+     * @return [type]              [description]
+     */
+    public static function findRefund($orderSn, $userId, $accessToken)
+    {
+        $config = self::$config;
+        $url = self::$paymentUrl . 'findOrderRefund';
+        $params = [
+            'access_token'  => $accessToken, // 获取开发者服务权限说明
+            'tpOrderId' => $orderSn, // 开发者订单
+            'userId'    => $userId, // 百度收银台用户 ID
+            'pmAppKey'  => $config['app_key'], // 调起百度收银台的支付服务
+        ];
+        $response = Http::get($url, $params);
+        $result = json_decode($response, true);
+
         return $result;
     }
 
@@ -147,7 +212,7 @@ class Baidu
         if (!$data || empty($data['rsaSign']))
             die('暂无回调信息');
 
-        $result = self::checkSign($data, $config['public_key']); // 进行签名验证
+        $result = self::verifySign($data, $config['public_key']); // 进行签名验证
         // 判断签名是否正确  判断支付状态
         if ($result && $data['status']==2) {
             return $data;
@@ -207,12 +272,12 @@ class Baidu
     }
 
     /**
-     * [checkSign 使用公钥校验签名]
+     * [verifySign 使用公钥校验签名]
      * @param  array  $assocArr     [入参数据，签名属性名固定为rsaSign]
      * @param  [type] $rsaPubKeyStr [公钥原始字符串，不含PEM格式前后缀]
      * @return [type]               [验签通过|false 验签不通过]
      */
-    public static function checkSign(array $assocArr, $rsaPubKeyStr)
+    public static function verifySign(array $assocArr, $rsaPubKeyStr)
     {
         if (!isset($assocArr['rsaSign']) || empty($assocArr) || empty($rsaPubKeyStr)) {
             return false;

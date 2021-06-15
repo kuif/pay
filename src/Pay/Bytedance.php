@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-12T15:15:37+08:00
+ * @Last Modified time: 2021-06-15T17:06:18+08:00
  */
 namespace fengkui\Pay;
 
@@ -15,6 +15,11 @@ use fengkui\Supports\Http;
  */
 class Bytedance
 {
+    // 接口版本
+    const EDITON = 'v1';
+
+    // 统一下订单管理
+    private static $ecpayUrl = 'https://developer.toutiao.com/api/apps/ecpay/';
     // 服务端预下单
     private static $createOrderUrl = 'https://developer.toutiao.com/api/apps/ecpay/v1/create_order';
     // 订单查询
