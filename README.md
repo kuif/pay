@@ -97,9 +97,9 @@ $bytedanceConfig = [
 
 ### 单独使用
 ```php
-$xcx = new \fengkui\Pay\Wechat($wechatConfig); // 微信
-$xcx = new \fengkui\Pay\Baidu($baiduConfig); // 百度
-$xcx = new \fengkui\Pay\Bytedance($bytedanceConfig); // 字节跳动
+$pay = new \fengkui\Pay\Wechat($wechatConfig); // 微信
+$pay = new \fengkui\Pay\Baidu($baiduConfig); // 百度
+$pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 字节跳动
 ```
 
 ### 公共使用
