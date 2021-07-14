@@ -2,7 +2,7 @@
 
 [![Latest Stable Version](http://poser.pugx.org/fengkui/pay/v)](https://packagist.org/packages/fengkui/pay) [![Total Downloads](http://poser.pugx.org/fengkui/pay/downloads)](https://packagist.org/packages/fengkui/pay) [![Latest Unstable Version](http://poser.pugx.org/fengkui/pay/v/unstable)](https://packagist.org/packages/fengkui/pay) [![License](http://poser.pugx.org/fengkui/pay/license)](https://packagist.org/packages/fengkui/pay)
 
-开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造轮子，整合支付（微信、QQ、百度、字节跳动）相关开发。
+开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造轮子，整合支付（微信、百度、字节跳动）相关开发。
 
 **！！请先熟悉 相关支付 说明文档！！请具有基本的 debug 能力！！**
 
@@ -66,7 +66,7 @@ $wechatConfig = [
     'appid'         => '', // 微信支付appid
     'mchid'         => '', // 微信支付 mch_id 商户收款账号
     'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过）
-    'appsecret'     => '', // 公众帐号 secert (公众号支付获取openid使用)
+    'appsecret'     => '', // 公众帐号 secert (公众号支付获取code 和 openid使用)
 
     'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
     'redirect_url'  => '', // 公众号支付，调起支付页面

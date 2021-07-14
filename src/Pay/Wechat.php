@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-27T16:36:14+08:00
+ * @Last Modified time: 2021-07-12 18:24:18
  */
 namespace fengkui\Pay;
 
@@ -37,7 +37,7 @@ class Wechat
         'appid'         => '', // 微信支付appid
         'mchid'         => '', // 微信支付 mch_id 商户收款账号
         'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过）
-        'appsecret'     => '', // 公众帐号 secert (公众号支付获取openid使用)
+        'appsecret'     => '', // 公众帐号 secert (公众号支付获取code 和 openid使用)
 
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
         'redirect_url'  => '', // 公众号支付，调起支付页面
@@ -78,7 +78,7 @@ class Wechat
             'description'   => $order['body'], // 商品描述
             'out_trade_no'  => (string)$order['order_sn'], // 商户系统内部订单号
             'notify_url'    => $config['notify_url'], // 通知URL必须为直接可访问的URL
-            'amount'        => ['total' => $order['total_amount'], 'currency' => 'CNY'], // 订单金额信息
+            'amount'        => ['total' => (int)$order['total_amount'], 'currency' => 'CNY'], // 订单金额信息
         );
 
         !empty($order['attach']) && $params['attach'] = $order['attach']; // 附加数据
@@ -152,24 +152,24 @@ class Wechat
      * @param  [type] $order [订单信息数组]
      * @return [type]        [description]
      */
-    public static function js($order=[], $code=NULL){
+    public static function js($order=[]){
         $config = self::$config;
         if (!is_array($order) || count($order) < 3)
             die("订单数组信息缺失！");
-        if (count($order) == 4) {
+        if (count($order) == 4 && !empty($order['openid'])) {
             $data = self::xcx($order, false, false); // 获取支付相关信息(获取非小程序信息)
             return $data;
         }
-        $code = $_GET['code'] ?? '';
+        $code = !empty($order['code']) ? $order['code'] : ($_GET['code'] ?? '');
         $redirectUri = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . rtrim($_SERVER['REQUEST_URI'], '/') . '/'; // 重定向地址
 
         $params = ['appid' => $config['appid']];
-        // 如果没有get参数没有code；则重定向去获取openid；
+        // 如果没有get参数没有code；则重定向去获取code；
         if (empty($code)) {
             $params['redirect_uri'] = $redirectUri; // 返回的url
             $params['response_type'] = 'code';
             $params['scope'] = 'snsapi_base';
-            $params['state'] = $order['out_trade_no']; // 获取订单号
+            $params['state'] = $order['order_sn']; // 获取订单号
 
             $url = self::$authorizeUrl . '?'. http_build_query($params) .'#wechat_redirect';
         } else {
@@ -182,6 +182,10 @@ class Wechat
 
             $order['openid'] = $result['openid']; // 获取到的openid
             $data = self::xcx($order, false, false); // 获取支付相关信息(获取非小程序信息)
+
+            if (!empty($order['code'])) {
+                return $data;
+            }
 
             $url = $config['redirect_url'] ?? $redirectUri;
             $url .= '?data=' . json_encode($data, JSON_UNESCAPED_UNICODE);
@@ -251,10 +255,11 @@ class Wechat
         }
 
         $order['type'] = 'jsapi'; // 获取订单类型，用户拼接请求地址
+        $config = self::$config;
         $result = self::unifiedOrder($order, $type);
         if (!empty($result['prepay_id'])) {
             $data = array (
-                'appId'     => self::$config['xcxid'],
+                'appId'     => $type ? $config['xcxid'] : $config['appid'], // 由微信生成的应用ID
                 'timeStamp' => (string)time(),
                 'nonceStr'  => self::get_rand_str(32, 0, 1), // 随机32位字符串
                 'package'   => 'prepay_id='.$result['prepay_id'],
@@ -400,7 +405,13 @@ class Wechat
         //商户号
         $mchid = $config['mchid'];
         // 证书序列号
-        $serial_no = $config['serial_no'];
+        if (empty($config['serial_no'])) {
+            $certFile = @file_get_contents($config['cert_client']);
+            $certArr = openssl_x509_parse($publicStr);
+            $serial_no = $certArr['serialNumberHex'];
+        } else {
+            $serial_no = $config['serial_no'];
+        }
 
         // 解析url地址
         $url_parts = parse_url($url);
