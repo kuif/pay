@@ -33,11 +33,11 @@ class Wechat
 
     // 支付完整配置
     private static $config = array(
-        'xcxid'         => '', // 小程序appid
-        'appid'         => '', // 微信支付appid
+        'xcxid'         => '', // 小程序 appid
+        'appid'         => '', // 微信支付 appid
         'mchid'         => '', // 微信支付 mch_id 商户收款账号
         'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过）
-        'appsecret'     => '', // 公众帐号 secert (公众号支付获取code 和 openid使用)
+        'appsecret'     => '', // 公众帐号 secert (公众号支付获取 code 和 openid 使用)
 
         'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
         'redirect_url'  => '', // 公众号支付，调起支付页面
@@ -407,7 +407,7 @@ class Wechat
         // 证书序列号
         if (empty($config['serial_no'])) {
             $certFile = @file_get_contents($config['cert_client']);
-            $certArr = openssl_x509_parse($publicStr);
+            $certArr = openssl_x509_parse($certFile);
             $serial_no = $certArr['serialNumberHex'];
         } else {
             $serial_no = $config['serial_no'];
