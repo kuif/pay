@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-07-12 18:24:18
+ * @Last Modified time: 2021-10-30T14:03:19+08:00
  */
 namespace fengkui\Pay;
 
@@ -69,8 +69,7 @@ class Wechat
      */
     public static function unifiedOrder($order, $type=false)
     {
-        $config = array_filter(self::$config);
-
+        $config = self::$config;
         // 获取配置项
         $params = array(
             'appid'         => $type ? $config['xcxid'] : $config['appid'], // 由微信生成的应用ID
@@ -381,6 +380,82 @@ class Wechat
         $result = json_decode($response, true);
 
         return $result;
+    }
+
+    /**
+     * [transfer 付款至用户零钱（V2）]
+     * @param  array  $order [订单相关信息]
+     * @param  string $key   [apiv2秘钥（key）]
+     * @return [type]        [description]
+     */
+    public static function transfer($order = [], $key = '')
+    {
+        $config = self::$config;
+        if(empty($order['order_sn']) || empty($order['amount']) || empty($order['body']) || empty($order['openid'])){
+            die("订单数组信息缺失！");
+        }
+        $params = array(
+            'mch_appid' => $config['appid'], // 商户账号appid
+            'mchid'     => $config['mchid'], // 商户号
+            'nonce_str' => self::get_rand_str(32, 0, 1), // 随机32位字符串
+            'partner_trade_no'  => $order['order_sn'], // 商户订单号
+            'check_name' => 'NO_CHECK',
+            'openid'    => $order['openid'], // 用户openid
+            'amount'    => $order['amount'], // 金额
+            'desc'      => $order['body'], // 付款备注
+        );
+
+        $data = array_filter($params);
+        ksort($data);
+        $string_sign_temp = urldecode(http_build_query($data)) . "&key=" . $key;
+        $sign = md5($string_sign_temp);
+        $params['sign'] = strtoupper($sign); // 签名
+
+        $url = "https://api.mch.weixin.qq.com/mmpaymkttransfers/promotion/transfers";
+        $header[] = "Content-type: text/xml";
+        $pem = [
+            'cert' => $config['cert_client'],
+            'key' => $config['cert_key'],
+        ];
+        $response = Http::post($url, self::array_to_xml($params), $header, $pem);
+        $result = self::xml_to_array($response);
+
+        return $result;
+    }
+
+    /**
+     * [xml_to_array 将xml转为array（V2）]
+     * @param  [type] $xml [xml字符串]
+     * @return [type]      [转换得到的数组]
+     */
+    public static function xml_to_array($xml)
+    {
+        //禁止引用外部xml实体
+        libxml_disable_entity_loader(true);
+        $result = json_decode(json_encode(simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
+        return $result;
+    }
+
+    /**
+     * [array_to_xml 输出xml字符（V2）]
+     * @param  [type] $data [description]
+     * @return [type]       [description]
+     */
+    public static function array_to_xml($data)
+    {
+        if(!is_array($data) || count($data) <= 0){
+            die("数组数据异常！");
+        }
+        $xml = "<xml>";
+        foreach ($data as $key=>$val){
+            if (is_numeric($val)){
+                $xml .= "<".$key.">".$val."</".$key.">";
+            }else{
+                $xml .= "<".$key."><![CDATA[".$val."]]></".$key.">";
+            }
+        }
+        $xml .= "</xml>";
+        return $xml;
     }
 
     /**

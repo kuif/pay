@@ -31,6 +31,7 @@
 |  close  |  关闭订单  |
 |  refund  |  申请退款  |
 |  notify  |  支付结果通知  |
+|  transfer  |  付款至用户零钱(v2)  |
 
 ### 2、百度（Baidu）
 
