@@ -75,7 +75,7 @@ $wechatConfig = [
     'serial_no'     => '', // 证书序列号
     'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
     'cert_key'      => './cert/apiclient_key.pem', // 商户私钥（Api安全中下载）
-    'public_key'    => './cert/public_key.pem', // 平台公钥（调动证书列表，自动生成）
+    'public_key'    => './cert/public_key.pem', // 平台公钥（调动证书列表，自动生成，注意目录读写权限）
 ];
 # 百度支付配置
 $baiduConfig = [

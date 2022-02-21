@@ -299,7 +299,7 @@ class Wechat
     {
         $config = self::$config;
         $server = $server ?? $_SERVER;
-        $response = $response ?? file_get_contents('php://input', 'r');
+        $response = $response ?: file_get_contents('php://input', 'r');
         if (empty($response) || empty($server['HTTP_WECHATPAY_SIGNATURE'])) {
             return false;
         }
