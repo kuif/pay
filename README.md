@@ -9,7 +9,7 @@
 欢迎 Star，欢迎 PR！
 
 ## 特点
-- 丰富的扩展，支持微信、百度、字节跳动
+- 丰富的扩展，支持微信（商户直连和服务商）、百度、字节跳动
 - 符合 PSR 标准，方便的与你的框架集成
 - 文件结构清晰，每个类单独封装扩展，便于单独使用
 
@@ -66,16 +66,20 @@ $wechatConfig = [
     'xcxid'         => '', // 小程序 appid
     'appid'         => '', // 微信支付 appid
     'mchid'         => '', // 微信支付 mch_id 商户收款账号
-    'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过）
+    'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过，服务商模式使用服务商key）
     'appsecret'     => '', // 公众帐号 secert (公众号支付获取 code 和 openid 使用)
+
+    'sp_appid'      => '', // 服务商应用 ID
+    'sp_mchid'      => '', // 服务商户号
 
     'notify_url'    => '', // 接收支付状态的连接  改成自己的回调地址
     'redirect_url'  => '', // 公众号支付，调起支付页面
 
-    'serial_no'     => '', // 证书序列号
+    // 服务商模式下，使用服务商证书
+    'serial_no'     => '', // 证书序列号（可不传，默认根据证书直接获取）
     'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
     'cert_key'      => './cert/apiclient_key.pem', // 商户私钥（Api安全中下载）
-    'public_key'    => './cert/public_key.pem', // 平台公钥（调动证书列表，自动生成，注意目录读写权限）
+    'public_key'    => './cert/public_key.pem', // 平台公钥（调动证书列表，自动生成，注意目录权限）
 ];
 # 百度支付配置
 $baiduConfig = [

@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2022-02-22T16:26:35+08:00
+ * @Last Modified time: 2022-02-24T16:26:13+08:00
  */
 namespace fengkui\Pay;
 
@@ -18,6 +18,8 @@ use fengkui\Supports\Http;
 class Wechat
 {
     const AUTH_TAG_LENGTH_BYTE = 16;
+    // 是否是服务商
+    private static $facilitator = false;
 
     // 新版相关接口
     // GET 获取平台证书列表
@@ -38,7 +40,7 @@ class Wechat
         'xcxid'         => '', // 小程序 appid
         'appid'         => '', // 微信支付 appid
         'mchid'         => '', // 微信支付 mch_id 商户收款账号
-        'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过）
+        'key'           => '', // 微信支付 apiV3key（尽量包含大小写字母，否则验签不通过，服务商模式使用服务商key）
         'appsecret'     => '', // 公众帐号 secert (公众号支付获取 code 和 openid 使用)
 
         'sp_appid'      => '', // 服务商应用 ID
@@ -60,7 +62,10 @@ class Wechat
      */
     public function __construct($config=NULL, $referer=NULL){
         $config && self::$config = array_merge(self::$config, $config);
-        (self::$config['sp_appid'] && self::$config['sp_mchid']) && self::$transactionsUrl = self::$partnerTransactionsUrl;
+        if (self::$config['sp_appid'] && self::$config['sp_mchid']) {
+            self::$facilitator = true; // 服务商模式
+            self::$transactionsUrl = self::$partnerTransactionsUrl;
+        }
     }
 
     /**
@@ -86,7 +91,7 @@ class Wechat
             'notify_url'    => $config['notify_url'], // 通知URL必须为直接可访问的URL
             'amount'        => ['total' => (int)$order['total_amount'], 'currency' => 'CNY'], // 订单金额信息
         );
-        if ($config['sp_appid'] && $config['sp_mchid']) {
+        if (self::$facilitator) {
             $params['sp_appid'] = $config['sp_appid']; // 服务商应用ID
             $params['sp_mchid'] = $config['sp_mchid']; // 服务商户号
             $params['sub_appid'] = $type ? $config['xcxid'] : $config['appid']; // 子商户的应用ID
@@ -135,7 +140,7 @@ class Wechat
     public static function query($orderSn, $type = false)
     {
         $config = self::$config;
-        if ($config['sp_appid'] && $config['sp_mchid']) {
+        if (self::$facilitator) {
             $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $orderSn . '?sp_mchid=' . $config['sp_mchid'] . '&sub_mchid=' . $config['mchid'];
         } else {
             $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $orderSn . '?mchid=' . $config['mchid'];
@@ -157,7 +162,7 @@ class Wechat
     public static function close($orderSn)
     {
         $config = self::$config;
-        if ($config['sp_appid'] && $config['sp_mchid']) {
+        if (self::$facilitator) {
             $params['sp_mchid'] = $config['sp_mchid']; // 服务商户号
             $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
         } else {
@@ -319,7 +324,7 @@ class Wechat
     public static function notify($server = [], $response = [])
     {
         $config = self::$config;
-        $server = $server ?? $_SERVER;
+        $server = $server ?: $_SERVER;
         $response = $response ?: file_get_contents('php://input', 'r');
         if (empty($response) || empty($server['HTTP_WECHATPAY_SIGNATURE'])) {
             return false;
@@ -497,7 +502,7 @@ class Wechat
     protected static function createAuthorization($url, $data=[], $method='POST'){
         $config = self::$config;
         // 商户号（服务商模式使用服务商商户号）
-        $mchid = ($config['sp_appid'] && $config['sp_mchid']) ? $config['sp_mchid'] : $config['mchid'];
+        $mchid = self::$facilitator ? $config['sp_mchid'] : $config['mchid'];
         // $mchid = $config['mchid'];
         // 证书序列号
         if (empty($config['serial_no'])) {
@@ -630,8 +635,10 @@ class Wechat
                     $certificate['encrypt_certificate']['nonce'],
                     $certificate['encrypt_certificate']['ciphertext']
                 );
-                file_put_contents($config['public_key'], $publicKey);
-                break; // 终止循环
+                if ($publicKey) { // 生成public_key证书文件
+                    file_put_contents($config['public_key'], $publicKey);
+                    break; // 终止循环
+                }
             }
             // self::$publicKey[$certificate['serial_no']] = $publicKey;
         }
