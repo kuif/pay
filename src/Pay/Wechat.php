@@ -379,7 +379,8 @@ class Wechat
             $orderDetail = self::query($order['order_sn']);
         }
         $params['amount']['total'] = $orderDetail['amount']['total'];
-        !empty($order['reason']) && $params['reason'] = $order['reason'];
+        empty($order['reason']) || $params['reason'] = $order['reason'];
+        self::$facilitator && $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
 
         $url = self::$refundUrl;
         $header = self::createAuthorization($url, $params, 'POST');
