@@ -113,12 +113,14 @@ class Wechat
             $params['time_expire'] = date(DATE_ATOM, $time);
         }
 
-        if (in_array($order['type'], ['iOS', 'Android', 'Wap'])) {
+        if (in_array($order['type'], ['ios', 'android', 'wap'])) {
+            $params['scene_info'] = ['payer_client_ip' => self::get_ip()];
             $params['scene_info']['h5_info'] = ['type' => $order['type']];
             $url = self::$transactionsUrl . 'h5'; // 拼接请求地址
         } else {
             $url = self::$transactionsUrl . strtolower($order['type']); // 拼接请求地址
         }
+        isset($order['_url']) && $url = $order['_url'];
 
         // 获取post请求header头
         $header = self::createAuthorization($url, $params, 'POST');
@@ -256,7 +258,8 @@ class Wechat
      */
     public static function h5($order=[], $log=false)
     {
-        if(empty($order['order_sn']) || empty($order['total_amount']) || empty($order['body']) || empty($order['type']) || !in_array(strtolower($order['type']), ['ios', 'android', 'wap'])){
+        $order['type'] = isset($order['type']) ? strtolower($order['type']) : 'wap';
+        if(empty($order['order_sn']) || empty($order['total_amount']) || empty($order['body']) || !in_array($order['type'], ['ios', 'android', 'wap'])){
             die("订单数组信息缺失！");
         }
         $result = self::unifiedOrder($order);
@@ -639,7 +642,7 @@ class Wechat
                     return $publicKey; // 返回证书信息
                     break; // 终止循环
                 } else {
-                    throw new \Exception("[ 404 ] public_key 生成失败，加密字符串解析为空");
+                    throw new \Exception("[ 404 ] public_key 生成失败，加密字符串解析为空，请检查配置 key 是否匹配");
                 }
             }
         }
