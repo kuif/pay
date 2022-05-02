@@ -324,23 +324,23 @@ class Wechat
      * [notify 回调验证]
      * @return [array] [返回数组格式的notify数据]
      */
-    public static function notify($server = [], $response = [])
+    public static function notify($is_verify = true)
     {
         $config = self::$config;
-        $server = $server ?: $_SERVER;
         $response = $response ?: file_get_contents('php://input', 'r');
-        if (empty($response) || empty($server['HTTP_WECHATPAY_SIGNATURE'])) {
-            return false;
-        }
-        $body = [
-            'timestamp' => $server['HTTP_WECHATPAY_TIMESTAMP'],
-            'nonce' => $server['HTTP_WECHATPAY_NONCE'],
-            'data' => $response,
-        ];
-        // 验证应答签名
-        $verifySign = self::verifySign($body, trim($server['HTTP_WECHATPAY_SIGNATURE']), trim($server['HTTP_WECHATPAY_SERIAL']));
-        if (!$verifySign) {
-            throw new \Exception("[ 401 ] SIGN_ERROR 签名错误");
+        if ($is_verify) { //
+            $server = $_SERVER;
+            if (empty($response) || empty($server['HTTP_WECHATPAY_SIGNATURE']))
+                return false;
+            $body = [
+                'timestamp' => $server['HTTP_WECHATPAY_TIMESTAMP'],
+                'nonce' => $server['HTTP_WECHATPAY_NONCE'],
+                'data' => $response,
+            ];
+            // 验证应答签名
+            $verifySign = self::verifySign($body, trim($server['HTTP_WECHATPAY_SIGNATURE']), trim($server['HTTP_WECHATPAY_SERIAL']));
+            if (!$verifySign)
+                throw new \Exception("[ 401 ] SIGN_ERROR 签名错误");
         }
         $result = json_decode($response, true);
         if (empty($result) || $result['event_type'] != 'TRANSACTION.SUCCESS' || $result['summary'] != '支付成功') {
@@ -398,9 +398,10 @@ class Wechat
      * @param  [type] $refundSn [退款单号]
      * @return [type]           [description]
      */
-    public static function queryRefund($refundSn, $type = false)
+    public static function queryRefund($refundSn)
     {
         $url = self::$refundUrl . '/' . $refundSn;
+        self::$facilitator && $url .= '&sub_mchid=' . $config['mchid'];
         $params = '';
 
         $header = self::createAuthorization($url, $params, 'GET');
