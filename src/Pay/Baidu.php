@@ -160,7 +160,7 @@ class Baidu
             'bizRefundBatchId'  => $order['refund_sn'], // 开发者退款批次
             'isSkipAudit'       => 1, // 是否跳过审核，不需要百度请求开发者退款审核请传 1，默认为0； 0：不跳过开发者业务方审核；1：跳过开发者业务方审核。
             'orderId'           => $order['order_id'], // 百度收银台订单 ID
-            'refundReason'      => $order['body'], // 退款原因
+            'refundReason'      => $order['reason'], // 退款原因
             'refundType'        => $type, // 退款类型 1：用户发起退款；2：开发者业务方客服退款；3：开发者服务异常退款。
             'tpOrderId'         => $order['order_sn'], // 开发者订单 ID
             'userId'            => $order['user_id'], // 百度收银台用户 id

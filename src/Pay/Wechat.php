@@ -327,8 +327,8 @@ class Wechat
     public static function notify($is_verify = true)
     {
         $config = self::$config;
-        $response = $response ?: file_get_contents('php://input', 'r');
-        if ($is_verify) { //
+        $response = file_get_contents('php://input', 'r');
+        if ($is_verify) { // 是否进行签名验证
             $server = $_SERVER;
             if (empty($response) || empty($server['HTTP_WECHATPAY_SIGNATURE']))
                 return false;

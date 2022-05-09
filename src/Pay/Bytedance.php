@@ -159,8 +159,8 @@ class Bytedance
             'app_id'        => $config['app_id'], // 是	小程序 id
             'out_order_no'  => (string)$order['order_sn'], // 是	商户分配订单号，标识进行退款的订单
             'out_refund_no' => (string)$order['refund_sn'], // 是	商户分配退款号
-            'refund_amount' => $order['total_amount'], // 是	退款金额，单位[分]
-            'reason'        => $order['body'] ?? '用户申请退款', // 是	退款理由，长度上限 100
+            'refund_amount' => $order['refund_amount'], // 是	退款金额，单位[分]
+            'reason'        => $order['reason'] ?? '用户申请退款', // 是	退款理由，长度上限 100
             // 'cp_extra'      => '', // 否	开发者自定义字段，回调原样回传
             // 'notify_url'    => '', // 否	商户自定义回调地址
             // 'sign'          => '', // 是	开发者对核心字段签名, 签名方式见文档, 防止传输过程中出现意外
