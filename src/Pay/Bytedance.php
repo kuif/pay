@@ -237,7 +237,8 @@ class Bytedance
      * $order = array(
      *      'body'         => '', // 产品描述
      *      'total_amount' => '', // 订单金额（分）
-     *      'order_sn'     => '', // 订单编号
+     *      'order_sn'     => '', // 商户分配订单号
+     *      'settle_sn'    => '', // 开发者侧的结算号
      * );
      */
     public static function settle($order)

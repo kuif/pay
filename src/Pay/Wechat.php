@@ -30,6 +30,10 @@ class Wechat
     private static $partnerTransactionsUrl = 'https://api.mch.weixin.qq.com/v3/pay/partner/transactions/';
     // 申请退款
     private static $refundUrl = 'https://api.mch.weixin.qq.com/v3/refund/domestic/refunds';
+    // 商家转账到零钱
+    private static $batchesUrl = 'https://api.mch.weixin.qq.com/v3/transfer/batches';
+    // 请求分账
+    private static $profitSharingUrl = 'https://api.mch.weixin.qq.com/v3/profitsharing/orders';
     // 静默授权，获取code
     private static $authorizeUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize';
     // 通过code获取access_token以及openid
@@ -105,6 +109,7 @@ class Wechat
 
         !empty($params['payer']) && $params['scene_info'] = ['payer_client_ip' => self::get_ip()]; // IP地址
         !empty($order['attach']) && $params['attach'] = $order['attach']; // 附加数据
+        !empty($order['settle_info']) && $params['settle_info'] = ['profit_sharing' => true]; // 结算信息
 
         // 订单失效时间
         if (!empty($order['time_expire'])) {
@@ -314,7 +319,7 @@ class Wechat
         $result = self::unifiedOrder($order);
 
         if (!empty($result['code_url'])) {
-            return urldecode($result['code_url']); // 返回链接让用户点击跳转
+            return urldecode($result['code_url']); // 返回链接扫码跳转
         } else {
             return $log ? $result : false;
         }
@@ -412,79 +417,118 @@ class Wechat
     }
 
     /**
-     * [transfer 付款至用户零钱（V2）]
+     * [transfer 付款至用户零钱]
      * @param  array  $order [订单相关信息]
-     * @param  string $key   [apiv2秘钥（key）]
      * @return [type]        [description]
      */
-    public static function transfer($order = [], $key = '')
+    public static function transfer($order = [])
     {
         $config = self::$config;
-        if(empty($order['order_sn']) || empty($order['amount']) || empty($order['body']) || empty($order['openid'])){
+        if (empty($order['list']) && isset($order['openid']) && !empty($order['amount']))
+            $order['list'] = [[ 'amount' => $order['amount'], 'openid' => $order['openid']]];
+        if(empty($order['order_sn']) || empty($order['amount']) || empty($order['body']) || empty($order['list']))
             die("订单数组信息缺失！");
+        $list = [];
+        foreach ($order['list'] as $k => $v) {
+            $detail = [];
+            if (empty($v['amount']) || empty($v['openid']))
+                die("请填写转账详细信息！");
+            if ($v['amount'] >= 2000 && empty($v['name']))
+                die("单笔金额大于两千，请填写用户姓名");
+
+            $detail['out_detail_no'] = $v['order_sn'] ?? $order['order_sn'] . $k; // 商家明细单号
+            $detail['transfer_amount'] = $v['amount']; // 转账金额
+            $detail['transfer_remark'] = $v['remark'] ?? $order['body']; // 单条转账备注（微信用户会收到该备注）
+            $detail['openid'] = $v['openid']; // 用户在直连商户应用下的用户标示
+            !empty($v['name']) && $detail['user_name'] = self::getEncrypt($v['name']); // 收款用户姓名
+            $list[] = $detail;
         }
+
         $params = array(
-            'mch_appid' => $config['appid'], // 商户账号appid
-            'mchid'     => $config['mchid'], // 商户号
-            'nonce_str' => self::get_rand_str(32, 0, 1), // 随机32位字符串
-            'partner_trade_no'  => $order['order_sn'], // 商户订单号
-            'check_name' => 'NO_CHECK',
-            'openid'    => $order['openid'], // 用户openid
-            'amount'    => $order['amount'], // 金额
-            'desc'      => $order['body'], // 付款备注
+            'appid'         => $config['appid'] ?? $config['xcxid'], // 商户账号appid
+            'out_batch_no'  => (string)$order['order_sn'], // 商户订单号
+            'batch_name'    => $config['name'] ?? $order['body'], // 批次名称
+            'batch_remark'  => $order['body'], // 批次备注
+            'total_amount'  => $order['amount'], // 转账总金额
+            'total_num'     => count($list), // 转账总金额
+            'transfer_detail_list' => $list, // 付款备注
         );
 
-        $data = array_filter($params);
-        ksort($data);
-        $string_sign_temp = urldecode(http_build_query($data)) . "&key=" . $key;
-        $sign = md5($string_sign_temp);
-        $params['sign'] = strtoupper($sign); // 签名
-
-        $url = "https://api.mch.weixin.qq.com/mmpaymkttransfers/promotion/transfers";
-        $header[] = "Content-type: text/xml";
-        $pem = [
-            'cert' => $config['cert_client'],
-            'key' => $config['cert_key'],
-        ];
-        $response = Http::post($url, self::array_to_xml($params), $header, $pem);
-        $result = self::xml_to_array($response);
+        $url = self::$batchesUrl;
+        $header = self::createAuthorization($url, $params, 'POST');
+        $header[] = 'Wechatpay-Serial: ' . $config['serial_no'];
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
+        $result = json_decode($response, true);
 
         return $result;
     }
 
     /**
-     * [xml_to_array 将xml转为array（V2）]
-     * @param  [type] $xml [xml字符串]
-     * @return [type]      [转换得到的数组]
+     * [queryTransfer 查询转账]
+     * @param  [type] $refundSn [退款单号]
+     * @return [type]           [description]
      */
-    public static function xml_to_array($xml)
+    public static function queryTransfer($refundSn)
     {
-        // 禁止引用外部xml实体
-        libxml_disable_entity_loader(true);
-        $result = json_decode(json_encode(simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
+        $url = self::$refundUrl . '/' . $refundSn;
+        self::$facilitator && $url .= '&sub_mchid=' . $config['mchid'];
+        $params = '';
+
+        $header = self::createAuthorization($url, $params, 'GET');
+        $response = Http::get($url, $params, $header);
+        $result = json_decode($response, true);
+
         return $result;
     }
 
     /**
-     * [array_to_xml 输出xml字符（V2）]
-     * @param  [type] $data [description]
-     * @return [type]       [description]
+     * [profitSharing 请求分账]
+     * @param  array  $order [description]
+     * @return [type]        [description]
      */
-    public static function array_to_xml($data)
+    public static function profitSharing($order = [])
     {
-        if(!is_array($data) || count($data) <= 0){
-            die("数组数据异常！");
+        $config = self::$config;
+        if(empty($order['transaction_id']) || (empty($order['order_sn']) && empty($order['list']))){
+            die("订单数组信息缺失！");
         }
-        $xml = "<xml>";
-        foreach ($data as $key=>$val){
-            if (is_numeric($val)){
-                $xml .= "<".$key.">".$val."</".$key.">";
-            }else{
-                $xml .= "<".$key."><![CDATA[".$val."]]></".$key.">";
-            }
+        $list = [];
+        foreach ($order['list'] as $k => $v) {
+            $detail = [];
+            if (empty($v['account']) || empty($v['amount']))
+                die("请填写分账详细信息！");
+
+            $detail['type'] = mb_strlen($v['account']) < 10 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
+            $detail['account'] = $v['account']; // 分账接收方账号
+            !empty($v['name']) && $detail['user_name'] = self::getEncrypt($v['name']); // 分账个人接收方姓名
+            $detail['amount'] = $v['amount']; // 分账金额
+            $detail['description'] = $v['remark'] ?? ($order['body'] ?? '商家发起分账'); // 分账描述
+
+            $list[] = $detail;
         }
-        $xml .= "</xml>";
-        return $xml;
+
+        $params = array(
+            // 'appid'         => $config['appid'] ?? $config['xcxid'], // 商户账号appid
+            'transaction_id'  => $order['transaction_id'], // 微信订单号
+            'out_order_no'  => $order['order_sn'], // 商户分账单号
+            'receivers' => $list, // 分账接收方列表
+            'unfreeze_unsplit'  => $order['unfreeze'] ?? true, // 商户分账单号
+        );
+
+        if (self::$facilitator) {
+            $params['appid'] = $config['sp_appid']; // 服务商应用ID
+            $params['sub_appid'] = $config['appid'] ?? $config['xcxid']; // 子商户的应用ID
+            $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
+        } else {
+            $params['appid'] = $config['appid'] ?? $config['xcxid']; // 商户账号appid
+        }
+
+        $url = self::$profitSharingUrl;
+        $header = self::createAuthorization($url, $params, 'POST');
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
+        $result = json_decode($response, true);
+
+        return $result;
     }
 
     /**
@@ -647,6 +691,24 @@ class Wechat
                 }
             }
         }
+    }
+
+    /**
+     * [getEncrypt 将字符串信息进行加密]
+     * @param  [type] $str [description]
+     * @return [type]      [description]
+     */
+    private function getEncrypt($str) {
+        //$str是待加密字符串
+        $publicKey = @file_get_contents($config['public_key']);
+        $encrypted = '';
+        if (openssl_public_encrypt($str, $encrypted, $public_key, OPENSSL_PKCS1_OAEP_PADDING)) {
+            //base64编码
+            $sign = base64_encode($encrypted);
+        } else {
+            throw new Exception('encrypt failed');
+        }
+        return $sign;
     }
 
     /**
