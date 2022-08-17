@@ -33,7 +33,7 @@ class Wechat
     // 商家转账到零钱
     private static $batchesUrl = 'https://api.mch.weixin.qq.com/v3/transfer/batches';
     // 请求分账
-    private static $profitSharingUrl = 'https://api.mch.weixin.qq.com/v3/profitsharing/orders';
+    private static $profitSharingUrl = 'https://api.mch.weixin.qq.com/v3/profitsharing';
     // 静默授权，获取code
     private static $authorizeUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize';
     // 通过code获取access_token以及openid
@@ -109,7 +109,7 @@ class Wechat
 
         !empty($params['payer']) && $params['scene_info'] = ['payer_client_ip' => self::get_ip()]; // IP地址
         !empty($order['attach']) && $params['attach'] = $order['attach']; // 附加数据
-        !empty($order['settle_info']) && $params['settle_info'] = ['profit_sharing' => true]; // 结算信息
+        !empty($order['settle_info']) && $params['settle_info'] = ['profit_sharing' => $order['settle_info'] ? true : false, ]; // 结算信息
 
         // 订单失效时间
         if (!empty($order['time_expire'])) {
@@ -147,12 +147,14 @@ class Wechat
     public static function query($orderSn, $type = false)
     {
         $config = self::$config;
+        $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $orderSn;
+
         if (self::$facilitator) {
-            $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $orderSn . '?sp_mchid=' . $config['sp_mchid'] . '&sub_mchid=' . $config['mchid'];
+            $params['sp_mchid'] = $config['sp_mchid'];
+            $params['sub_mchid'] = $config['mchid'];
         } else {
-            $url = self::$transactionsUrl . ($type ? 'id/' : 'out-trade-no/') . $orderSn . '?mchid=' . $config['mchid'];
+            $params['mchid'] = $config['mchid'];
         }
-        $params = '';
 
         $header = self::createAuthorization($url, $params, 'GET');
         $response = Http::get($url, $params, $header);
@@ -405,9 +407,13 @@ class Wechat
      */
     public static function queryRefund($refundSn)
     {
+        $config = self::$config;
         $url = self::$refundUrl . '/' . $refundSn;
-        self::$facilitator && $url .= '&sub_mchid=' . $config['mchid'];
-        $params = '';
+        if (self::$facilitator) {
+            $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
+        } else {
+            $params = '';
+        }
 
         $header = self::createAuthorization($url, $params, 'GET');
         $response = Http::get($url, $params, $header);
@@ -445,7 +451,7 @@ class Wechat
         }
 
         $params = array(
-            'appid'         => $config['appid'] ?? $config['xcxid'], // 商户账号appid
+            'appid'         => $config['appid'] ?: $config['xcxid'], // 商户账号appid
             'out_batch_no'  => (string)$order['order_sn'], // 商户订单号
             'batch_name'    => $config['name'] ?? $order['body'], // 批次名称
             'batch_remark'  => $order['body'], // 批次备注
@@ -464,17 +470,25 @@ class Wechat
     }
 
     /**
-     * [queryTransfer 查询转账]
-     * @param  [type] $refundSn [退款单号]
-     * @return [type]           [description]
+     * [queryTransfer 查询转账到零钱]
+     * @param  [type]  $order [相关单号及批次查询]
+     * @param  boolean $type  [是否为微信批次单号查询]
+     * @return [type]         [description]
      */
-    public static function queryTransfer($refundSn)
+    public static function queryTransfer($order, $type = false)
     {
-        $url = self::$refundUrl . '/' . $refundSn;
-        self::$facilitator && $url .= '&sub_mchid=' . $config['mchid'];
-        $params = '';
+        if (empty($order['order_sn']) || ($type && empty($order['detail_sn'])))
+            die("转账单号缺失");
 
-        $header = self::createAuthorization($url, $params, 'GET');
+        if ($type) {
+            $url = self::$batchesUrl . '/batch-id/' . $order['order_sn']; // 微信批次单号查询批次单API
+            empty($order['detail_sn']) || $url .= '/details/detail-id/' . $order['detail_sn']; // 微信明细单号查询明细单API
+        } else {
+            $url = self::$batchesUrl . '/out-batch-no/' . $order['order_sn']; // 商家批次单号查询批次单API
+            empty($order['detail_sn']) || $url .= '/details/out-detail-no/' . $order['detail_sn']; // 商家明细单号查询明细单API
+        }
+
+        $header = self::createAuthorization($url, $params = '', 'GET');
         $response = Http::get($url, $params, $header);
         $result = json_decode($response, true);
 
@@ -489,6 +503,8 @@ class Wechat
     public static function profitSharing($order = [])
     {
         $config = self::$config;
+        if (empty($order['list']) && isset($order['openid']) && !empty($order['amount']))
+            $order['list'] = [['account' => $order['openid'], 'amount' => $order['amount']]];
         if(empty($order['transaction_id']) || (empty($order['order_sn']) && empty($order['list']))){
             die("订单数组信息缺失！");
         }
@@ -498,7 +514,8 @@ class Wechat
             if (empty($v['account']) || empty($v['amount']))
                 die("请填写分账详细信息！");
 
-            $detail['type'] = mb_strlen($v['account']) < 10 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
+            // 分账接收方类型
+            $detail['type'] = isset($v['type']) ? $v['type'] : (mb_strlen($v['account']) < 11 ? 'MERCHANT_ID' : (self::$facilitator ? 'PERSONAL_SUB_OPENID' : 'PERSONAL_OPENID'));
             $detail['account'] = $v['account']; // 分账接收方账号
             !empty($v['name']) && $detail['user_name'] = self::getEncrypt($v['name']); // 分账个人接收方姓名
             $detail['amount'] = $v['amount']; // 分账金额
@@ -508,22 +525,178 @@ class Wechat
         }
 
         $params = array(
-            // 'appid'         => $config['appid'] ?? $config['xcxid'], // 商户账号appid
             'transaction_id'  => $order['transaction_id'], // 微信订单号
-            'out_order_no'  => $order['order_sn'], // 商户分账单号
+            'out_order_no'  => (string)$order['order_sn'], // 商户分账单号
             'receivers' => $list, // 分账接收方列表
             'unfreeze_unsplit'  => $order['unfreeze'] ?? true, // 商户分账单号
         );
 
         if (self::$facilitator) {
             $params['appid'] = $config['sp_appid']; // 服务商应用ID
-            $params['sub_appid'] = $config['appid'] ?? $config['xcxid']; // 子商户的应用ID
+            $params['sub_appid'] = $config['appid'] ?: $config['xcxid']; // 子商户的应用ID
             $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
         } else {
-            $params['appid'] = $config['appid'] ?? $config['xcxid']; // 商户账号appid
+            $params['appid'] = $config['appid'] ?: $config['xcxid']; // 商户账号appid
         }
 
-        $url = self::$profitSharingUrl;
+        $url = self::$profitSharingUrl . '/orders';
+        $header = self::createAuthorization($url, $params, 'POST');
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
+     * [queryTransfer 解冻剩余资金]
+     * @param  [type]  $order [商户单号及微信单号]
+     * @return [type]         [description]
+     */
+    public static function profitsharingUnfreeze($order=[])
+    {
+        if (empty($order['transaction_id']) || empty($order['order_sn']))
+            die("转账单号缺失");
+
+        $params['transaction_id'] = $order['transaction_id'];
+        $params['out_order_no'] = $order['order_sn'];
+        $params['description'] = $order['reason'] ?? '解冻全部剩余资金';
+        self::$facilitator && $params['sub_mchid'] = self::$config['mchid']; // 子商户的商户号
+
+        $url = self::$profitSharingUrl . '/orders/unfreeze';
+        $header = self::createAuthorization($url, $params, 'POST');
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
+     * [queryTransfer 查询分账/查询分账剩余金额]
+     * @param  [type]  $order [分账单号等]
+     * @return [type]         [description]
+     */
+    public static function queryProfitsharing($order = [])
+    {
+        if (is_array($order) && (empty($order['transaction_id']) || empty($order['order_sn']))) {
+            die("支付单号缺失");
+
+            $params['transaction_id'] = $order['transaction_id'];
+            self::$facilitator && $params['sub_mchid'] = self::$config['mchid']; // 子商户的商户号
+            $url = self::$profitSharingUrl . '/orders/' . $order['order_sn'];
+        } else {
+            $params = '';
+            $url = self::$profitSharingUrl . '/transactions/' . $order . '/amounts';
+        }
+
+        $header = self::createAuthorization($url, $params, 'GET');
+        $response = Http::get($url, $params, $header);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
+     * [profitsharingReturn 请求分账回退]
+     * @param  [type] $account [分账接收方账号]
+     * @param  string $type    [与分账方的关系类型]
+     * @param  string $name    [分账个人接收方姓名]
+     * @return [type]          [description]
+     */
+    public function profitsharingReturn($order = [])
+    {
+        $config = self::$config;
+
+        if(empty($order['return_sn']) || empty($order['return_amount']) || (empty($order['order_sn']) && empty($order['order_id']))){
+            die("订单数组信息缺失！");
+        }
+        $params = array(
+            'out_return_no' => (string)$order['return_sn'], // 商户回退单号
+            'return_mchid' => $order['return_mchid'], // 回退商户号
+            'amount' => $order['return_amount'], // 回退金额
+        );
+        if (!empty($order['order_id'])) { // 微信分账单号
+            $params['order_id'] = $order['order_id'];
+        } else { // 商户分账单号
+            $params['out_order_no'] = $order['order_sn'];
+        }
+
+        $params['description'] = $order['reason'] ?? '用户申请退款'; // 回退描述
+        self::$facilitator && $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
+
+        $url = self::$profitSharingUrl . '/return-orders';
+        $header = self::createAuthorization($url, $params, 'POST');
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
+     * [receiversAdd 添加分账接收方]
+     * @param  [type] $account [分账接收方账号]
+     * @param  string $type    [与分账方的关系类型]
+     * @param  string $name    [分账个人接收方姓名]
+     * @return [type]          [description]
+     */
+    public function receiversAdd($account, $type='USER', $name='')
+    {
+        $config = self::$config;
+
+        $params['account'] = $account; // 分账接收方账号
+        $name && $params['user_name'] = self::getEncrypt($name); // 分账个人接收方姓名
+
+        $params['type'] = mb_strlen($account) < 11 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
+
+        // 与分账方的关系类型
+        if (in_array($type, ['STORE', 'STAFF', 'STORE_OWNER', 'PARTNER', 'HEADQUARTER', 'BRAND', 'DISTRIBUTOR', 'USER', 'SUPPLIER'])) {
+            $params['relation_type'] = $type;
+        } else {
+            $params['relation_type'] = 'CUSTOM';
+            $params['custom_relation'] = $type;
+        }
+
+        if (self::$facilitator) {
+            $params['type'] == 'PERSONAL_OPENID' && $params['type'] = 'PERSONAL_SUB_OPENID'; // 服务商跟换分账接收方类型
+            $params['appid'] = $config['sp_appid']; // 服务商应用ID
+            $params['sub_appid'] = $config['appid'] ?: $config['xcxid']; // 子商户的应用ID
+            $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
+        } else {
+            $params['appid'] = $config['appid'] ?: $config['xcxid']; // 商户账号appid
+        }
+
+        $url = self::$profitSharingUrl . '/receivers/add';
+        $header = self::createAuthorization($url, $params, 'POST');
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
+        $result = json_decode($response, true);
+
+        return $result;
+    }
+
+    /**
+     * [receiversAdd 添加分账接收方]
+     * @param  [type] $account [分账接收方账号]
+     * @param  string $name    [分账个人接收方姓名]
+     * @return [type]          [description]
+     */
+    public function receiversDelete($account, $name='')
+    {
+        $config = self::$config;
+
+        $params['account'] = $account; // 分账接收方账号
+        $name && $params['user_name'] = self::getEncrypt($name); // 分账个人接收方姓名
+
+        $params['type'] = mb_strlen($account) < 11 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
+
+        if (self::$facilitator) {
+            $params['type'] == 'PERSONAL_OPENID' && $params['type'] = 'PERSONAL_SUB_OPENID'; // 服务商跟换分账接收方类型
+            $params['appid'] = $config['sp_appid']; // 服务商应用ID
+            $params['sub_appid'] = $config['appid'] ?: $config['xcxid']; // 子商户的应用ID
+            $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
+        } else {
+            $params['appid'] = $config['appid'] ?: $config['xcxid']; // 商户账号appid
+        }
+
+        $url = self::$profitSharingUrl . '/receivers/delete';
         $header = self::createAuthorization($url, $params, 'POST');
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
@@ -542,13 +715,13 @@ class Wechat
 
     /**
      * [createAuthorization 获取接口授权header头信息]
-     * @param  [type] $url    [请求地址]
-     * @param  array  $data   [请求参数]
-     * @param  string $method [请求方式]
-     * @return [type]         [description]
+     * @param  [type] $url      [请求地址]
+     * @param  array  $params   [请求参数]
+     * @param  string $method   [请求方式]
+     * @return [type]           [description]
      */
     // 生成v3 Authorization
-    protected static function createAuthorization($url, $data=[], $method='POST'){
+    protected static function createAuthorization($url, $params=[], $method='POST'){
         $config = self::$config;
         // 商户号（服务商模式使用服务商商户号）
         $mchid = self::$facilitator ? $config['sp_mchid'] : $config['mchid'];
@@ -564,13 +737,18 @@ class Wechat
 
         // 解析url地址
         $url_parts = parse_url($url);
+        $url = ($url_parts['path'] . (!empty($url_parts['query']) ? "?${url_parts['query']}" : ""));
+        if (strtolower($method) == 'get') {
+            $query_string = ($params && is_array($params)) ? http_build_query($params) : $params;
+            $url = $query_string ? $url . (stripos($url, "?") !== false ? "&" : "?") . $query_string : $url;
+        }
         // 生成签名
         $body = [
             'method' => $method,
-            'url'   => ($url_parts['path'] . (!empty($url_parts['query']) ? "?${url_parts['query']}" : "")),
+            'url'   => $url,
             'time'  => time(), // 当前时间戳
             'nonce' => self::get_rand_str(32, 0, 1), // 随机32位字符串
-            'data'  => (strtolower($method) == 'post' ? json_encode($data, JSON_UNESCAPED_UNICODE) : $data), // POST请求时 需要 转JSON字符串
+            'data'  => strtolower($method) == 'post' ? json_encode($params, JSON_UNESCAPED_UNICODE) : '', // POST请求时 需要 转JSON字符串
         ];
         $sign = self::makeSign($body);
         // Authorization 类型
