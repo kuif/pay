@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2020-05-13 17:02:49
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2021-06-15T17:06:18+08:00
+ * @Last Modified time: 2023-04-12T14:02:14+08:00
  */
 namespace fengkui\Pay;
 
@@ -41,6 +41,7 @@ class Bytedance
     private static $config = array(
         'app_id'        => '', // App ID
         'salt'          => '', // 支付密钥值
+        'token'         => '', // 回调验签的Token
         'notify_url'    => '', // 支付回调地址
         'thirdparty_id' => '', // 第三方平台服务商 id，非服务商模式留空
     );
@@ -127,18 +128,21 @@ class Bytedance
      */
     public static function notifyOrder()
     {
-        $data = $_POST; // 获取回调数据
         $config = self::$config;
-        if (!$data || empty($data['msg']))
-            die('暂无回调信息');
-
-        $result = json_decode($data['msg'], true); // 进行签名验证
+        $response = file_get_contents('php://input', 'r');
+        $result = json_decode($response, true);
+        if (!$result || empty($result['msg']))
+            throw new \Exception("[400] 暂无回调信息");
+        $body = [
+            'msg'       => $result['msg'],
+            'nonce'     => $result['nonce'],
+            'timestamp' => $result['timestamp'],
+        ];
         // 判断签名是否正确  判断支付状态
-        if ($result && $data['type']=='payment') {
-            return $data;
-        } else {
-            return false;
-        }
+        $verifySign = self::verifySign($body);
+        if (empty($result['msg_signature']) || $result['msg_signature'] != $verifySign)
+            throw new \Exception("[401] 签名错误");
+        return json_decode($result['msg'], true); // 进行签名验证
     }
 
     /**
@@ -216,19 +220,24 @@ class Bytedance
      */
     public static function notifyRefund()
     {
-        $data = $_POST; // 获取回调数据
         $config = self::$config;
-        if (!$data || empty($data['status']))
-            die('暂无回调信息');
-
-        $result = json_decode($data['msg'], true); // 进行签名验证
+        $response = file_get_contents('php://input', 'r');
+        $result = json_decode($response, true);
+        if (!$result || empty($result['msg']))
+            throw new \Exception("[400] 暂无回调信息");
+        $body = [
+            'msg'       => $result['msg'],
+            'nonce'     => $result['nonce'],
+            'timestamp' => $result['timestamp'],
+        ];
         // 判断签名是否正确  判断支付状态
-        if ($result && $data['status']!='FAIL') {
-            return $data;
-        } else {
-            return false;
-        }
+        $verifySign = self::verifySign($body);
+        if (empty($result['msg_signature']) || $result['msg_signature'] != $verifySign)
+            throw new \Exception("[401] 签名错误");
+        return json_decode($result['msg'], true); // 进行签名验证
     }
+
+
 
     /**
      * [settle 分账请求]
@@ -297,18 +306,21 @@ class Bytedance
      */
     public static function notifySettle()
     {
-        $data = $_POST; // 获取回调数据
         $config = self::$config;
-        if (!$data || empty($data['status']))
-            die('暂无回调信息');
-
-        $result = json_decode($data['msg'], true); // 进行签名验证
+        $response = file_get_contents('php://input', 'r');
+        $result = json_decode($response, true);
+        if (!$result || empty($result['msg']))
+            throw new \Exception("[400] 暂无回调信息");
+        $body = [
+            'msg'       => $result['msg'],
+            'nonce'     => $result['nonce'],
+            'timestamp' => $result['timestamp'],
+        ];
         // 判断签名是否正确  判断支付状态
-        if ($result && $data['status']!='FAIL') {
-            return $data;
-        } else {
-            return false;
-        }
+        $verifySign = self::verifySign($body);
+        if (empty($result['msg_signature']) || $result['msg_signature'] != $verifySign)
+            throw new \Exception("[401] 签名错误");
+        return json_decode($result['msg'], true); // 进行签名验证
     }
 
     /**
@@ -372,7 +384,7 @@ class Bytedance
         $config = self::$config;
         $rList = array();
         foreach($data as $k => $v) {
-            if ($k == "other_settle_params" || $k == "app_id" || $k == "sign" || $k == "thirdparty_id")
+            if (in_array($k, ['other_settle_params', 'app_id', 'sign', 'thirdparty_id']))
                 continue;
             $value = trim(strval($v));
             $len = strlen($value);
@@ -387,5 +399,26 @@ class Bytedance
         sort($rList, 2);
         return md5(implode('&', $rList));
     }
+
+    /**
+     * [verifySign 验证签名]
+     * @param  [type] $data [回调数据]
+     * @return [type]       [description]
+     */
+    public static function verifySign($data)
+    {
+        $config = self::$config;
+        $filtered = [];
+        foreach ($data as $key => $value) {
+            if (in_array($key, ['msg_signature', 'type']))
+                continue;
+            $filtered[] = is_string($value)? trim($value): $value;
+        }
+        $filtered[] = trim($config['token']);
+        sort($filtered, SORT_STRING);
+        $filtered = trim(implode('', $filtered));
+        return sha1($filtered);
+    }
+
 
 }
