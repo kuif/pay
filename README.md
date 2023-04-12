@@ -89,10 +89,11 @@ $baiduConfig = [
     'public_key'    => '', // 平台公钥
     'notify_url'    => '', // 支付回调地址
 ];
-# 字节跳动支付配置
+# 抖音支付配置
 $bytedanceConfig = [
     'app_id'        => '', // App ID
     'salt'          => '', // 支付密钥值
+    'token'         => '', // 回调验签的Token
     'notify_url'    => '', // 支付回调地址
     'thirdparty_id' => '', // 第三方平台服务商 id，非服务商模式留空
 ];
@@ -104,7 +105,7 @@ $bytedanceConfig = [
 ```php
 $pay = new \fengkui\Pay\Wechat($wechatConfig); // 微信
 $pay = new \fengkui\Pay\Baidu($baiduConfig); // 百度
-$pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 字节跳动
+$pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 抖音
 ```
 
 ### 公共使用
