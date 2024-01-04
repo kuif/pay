@@ -878,6 +878,7 @@ class Wechat
      */
     private function getEncrypt($str) {
         //$str是待加密字符串
+        $config = self::$config;
         $publicKey = @file_get_contents($config['public_key']);
         $encrypted = '';
         if (openssl_public_encrypt($str, $encrypted, $public_key, OPENSSL_PKCS1_OAEP_PADDING)) {

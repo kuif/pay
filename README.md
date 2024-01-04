@@ -2,14 +2,14 @@
 
 [![Latest Stable Version](http://poser.pugx.org/fengkui/pay/v)](https://packagist.org/packages/fengkui/pay) [![Total Downloads](http://poser.pugx.org/fengkui/pay/downloads)](https://packagist.org/packages/fengkui/pay) [![Latest Unstable Version](http://poser.pugx.org/fengkui/pay/v/unstable)](https://packagist.org/packages/fengkui/pay) [![License](http://poser.pugx.org/fengkui/pay/license)](https://packagist.org/packages/fengkui/pay)
 
-开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造轮子，整合支付（微信、百度、字节跳动）相关开发。
+开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造轮子，整合支付（微信、百度、抖音）相关开发。
 
 **！！请先熟悉 相关支付 说明文档！！请具有基本的 debug 能力！！**
 
 欢迎 Star，欢迎 PR！
 
 ## 特点
-- 丰富的扩展，支持微信（商户直连和服务商）、百度、字节跳动
+- 丰富的扩展，支持微信（商户直连和服务商）、百度、抖音
 - 符合 PSR 标准，方便的与你的框架集成
 - 文件结构清晰，每个类单独封装扩展，便于单独使用
 
@@ -41,7 +41,7 @@
 |  refund  |  申请退款  |
 |  notify  |  支付结果通知  |
 
-### 3、字节跳动（Bytedance）
+### 3、抖音（Bytedance）
 
 |  method  |  描述  |
 | :-------: | :-------:   |
