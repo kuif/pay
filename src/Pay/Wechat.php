@@ -673,7 +673,7 @@ class Wechat
     }
 
     /**
-     * [receiversAdd 添加分账接收方]
+     * [receiversDelete 删除分账接收方]
      * @param  [type] $account [分账接收方账号]
      * @param  string $name    [分账个人接收方姓名]
      * @return [type]          [description]

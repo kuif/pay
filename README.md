@@ -2,16 +2,16 @@
 
 [![Latest Stable Version](http://poser.pugx.org/fengkui/pay/v)](https://packagist.org/packages/fengkui/pay) [![Total Downloads](http://poser.pugx.org/fengkui/pay/downloads)](https://packagist.org/packages/fengkui/pay) [![Latest Unstable Version](http://poser.pugx.org/fengkui/pay/v/unstable)](https://packagist.org/packages/fengkui/pay) [![License](http://poser.pugx.org/fengkui/pay/license)](https://packagist.org/packages/fengkui/pay)
 
-开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造轮子，整合支付（微信、百度、抖音）相关开发。
+开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造了一个简单轮子，整合支付（微信、支付宝、百度、抖音）相关开发。
 
 **！！请先熟悉 相关支付 说明文档！！请具有基本的 debug 能力！！**
 
 欢迎 Star，欢迎 PR！
 
 ## 特点
-- 丰富的扩展，支持微信（商户直连和服务商）、百度、抖音
+- 丰富的扩展，支持微信（商户直连和服务商）、支付宝、百度、抖音
 - 符合 PSR 标准，方便的与你的框架集成
-- 文件结构清晰，每个类单独封装扩展，便于单独使用
+- 单文件结构清晰、简单，每个类单独封装扩展，便于单独使用
 
 ## 运行环境
 - PHP 7.0+
@@ -29,11 +29,39 @@
 |  xcx  |  小程序支付  |
 |  query  |  查询订单  |
 |  close  |  关闭订单  |
-|  refund  |  申请退款  |
 |  notify  |  支付结果通知  |
-|  transfer  |  付款至用户零钱(v2)  |
+|  refund  |  申请退款  |
+|  queryRefund  |  查询退款  |
+|  transfer  |  转账到零钱(v2)  |
+|  queryTransfer  |  查询转账到零钱(v2)  |
+|  profitSharing  |  请求分账  |
+|  profitsharingUnfreeze  |  解冻剩余资金  |
+|  queryProfitsharing  |  查询分账/查询分账剩余金额  |
+|  profitsharingReturn  |  请求分账回退  |
+|  receiversAdd  |  添加分账接收方  |
+|  receiversDelete  |  删除分账接收方  |
 
-### 2、百度（Baidu）
+### 2、支付宝（Alipay）
+
+|  method  |  描述  |
+| :-------: | :-------:   |
+|  web  |  电脑网页支付  |
+|  wap  |  手机网站支付  |
+|  face  |  发起当面付  |
+|  app  |  app支付（JSAPI）  |
+|  query  |  查询订单  |
+|  close  |  关闭订单  |
+|  notify  |  支付宝异步通知  |
+|  refund  |  订单退款  |
+|  transfer  |  转账到支付宝  |
+|  relationBind  |  分账关系绑定与解绑  |
+|  relationQuery  |  查询分账关系  |
+|  settle  |  统一收单交易结算接口  |
+|  settleQuery  |  交易分账查询接口  |
+|  onsettleQuery  |  分账比例查询 && 分账剩余金额查询  |
+|  doGetUserInfo  |  获取会员信息  |
+
+### 3、百度（Baidu）
 
 |  method  |  描述  |
 | :-------: | :-------:   |
@@ -41,7 +69,7 @@
 |  refund  |  申请退款  |
 |  notify  |  支付结果通知  |
 
-### 3、抖音（Bytedance）
+### 4、抖音（Bytedance）
 
 |  method  |  描述  |
 | :-------: | :-------:   |
@@ -81,6 +109,15 @@ $wechatConfig = [
     'cert_key'      => './cert/apiclient_key.pem', // 商户私钥（Api安全中下载）
     'public_key'    => './cert/public_key.pem', // 平台公钥（调动证书列表，自动生成，注意目录权限）
 ];
+# 支付宝支付配置
+$alipayConfig = [
+    'app_id'        => '', // 支付宝分配给开发者的应用ID
+    'public_key'    => '', // 支付宝公钥，一行字符串
+    'private_key'   => '', // 开发者私钥去头去尾去回车，一行字符串
+    'notify_url'    => '', // 异步接收支付状态 改成自己的回调地址
+    'return_url'    => '', // 同步接收支付状态 改成自己的回调地址
+    'sign_type'     => 'RSA2', // 生成签名字符串所使用的签名算法类型，目前支持RSA2和RSA，默认使用RSA2
+];
 # 百度支付配置
 $baiduConfig = [
     'deal_id'       => '', // 百度收银台的财务结算凭证
@@ -104,6 +141,7 @@ $bytedanceConfig = [
 ### 单独使用
 ```php
 $pay = new \fengkui\Pay\Wechat($wechatConfig); // 微信
+$pay = new \fengkui\Pay\Alipay($alipayConfig); // 支付宝
 $pay = new \fengkui\Pay\Baidu($baiduConfig); // 百度
 $pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 抖音
 ```
