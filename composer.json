@@ -1,6 +1,6 @@
 {
     "name": "fengkui/pay",
-    "description": "支付",
+    "description": "整合微信、支付宝、百度、字节跳动支付",
     "license": "MIT",
     "authors": [
         {

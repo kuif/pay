@@ -2,14 +2,14 @@
 
 [![Latest Stable Version](http://poser.pugx.org/fengkui/pay/v)](https://packagist.org/packages/fengkui/pay) [![Total Downloads](http://poser.pugx.org/fengkui/pay/downloads)](https://packagist.org/packages/fengkui/pay) [![Latest Unstable Version](http://poser.pugx.org/fengkui/pay/v/unstable)](https://packagist.org/packages/fengkui/pay) [![License](http://poser.pugx.org/fengkui/pay/license)](https://packagist.org/packages/fengkui/pay)
 
-开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造了一个简单轮子，整合支付（微信、支付宝、百度、抖音）相关开发。
+开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造了一个简单轮子，整合支付（微信、支付宝、百度、字节跳动）相关开发。
 
 **！！请先熟悉 相关支付 说明文档！！请具有基本的 debug 能力！！**
 
 欢迎 Star，欢迎 PR！
 
 ## 特点
-- 丰富的扩展，支持微信（商户直连和服务商）、支付宝、百度、抖音
+- 丰富的扩展，支持微信（商户直连和服务商）、支付宝、百度、字节跳动
 - 符合 PSR 标准，方便的与你的框架集成
 - 单文件结构清晰、简单，每个类单独封装扩展，便于单独使用
 
@@ -69,7 +69,7 @@
 |  refund  |  申请退款  |
 |  notify  |  支付结果通知  |
 
-### 4、抖音（Bytedance）
+### 4、字节跳动（Bytedance）
 
 |  method  |  描述  |
 | :-------: | :-------:   |
@@ -126,7 +126,7 @@ $baiduConfig = [
     'public_key'    => '', // 平台公钥
     'notify_url'    => '', // 支付回调地址
 ];
-# 抖音支付配置
+# 字节跳动支付配置
 $bytedanceConfig = [
     'app_id'        => '', // App ID
     'salt'          => '', // 支付密钥值
@@ -143,7 +143,7 @@ $bytedanceConfig = [
 $pay = new \fengkui\Pay\Wechat($wechatConfig); // 微信
 $pay = new \fengkui\Pay\Alipay($alipayConfig); // 支付宝
 $pay = new \fengkui\Pay\Baidu($baiduConfig); // 百度
-$pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 抖音
+$pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 字节跳动
 ```
 
 ### 公共使用

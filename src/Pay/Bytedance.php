@@ -10,7 +10,7 @@ namespace fengkui\Pay;
 use fengkui\Supports\Http;
 
 /**
- * Bytedance 抖音支付
+ * Bytedance 字节跳动支付
  * 小程序担保支付（V1）
  */
 class Bytedance
