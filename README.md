@@ -36,7 +36,7 @@
 |  queryTransfer  |  查询转账到零钱(v2)  |
 |  profitSharing  |  请求分账  |
 |  profitsharingUnfreeze  |  解冻剩余资金  |
-|  queryProfitsharing  |  查询分账/查询分账剩余金额  |
+|  queryProfitsharing  |  查询分账结果/查询分账剩余金额  |
 |  profitsharingReturn  |  请求分账回退  |
 |  receiversAdd  |  添加分账接收方  |
 |  receiversDelete  |  删除分账接收方  |
@@ -47,18 +47,22 @@
 | :-------: | :-------:   |
 |  web  |  电脑网页支付  |
 |  wap  |  手机网站支付  |
+|  xcx  |  小程序支付  |
 |  face  |  发起当面付  |
 |  app  |  app支付（JSAPI）  |
 |  query  |  查询订单  |
 |  close  |  关闭订单  |
 |  notify  |  支付宝异步通知  |
 |  refund  |  订单退款  |
-|  transfer  |  转账到支付宝  |
+|  refundQuery  |  查询订单退款  |
+|  transfer  |  转账到支付宝账户  |
+|  transQuery  | 查询转账到支付宝  |
 |  relationBind  |  分账关系绑定与解绑  |
 |  relationQuery  |  查询分账关系  |
 |  settle  |  统一收单交易结算接口  |
 |  settleQuery  |  交易分账查询接口  |
 |  onsettleQuery  |  分账比例查询 && 分账剩余金额查询  |
+|  getToken  |  获取access_token和user_id  |
 |  doGetUserInfo  |  获取会员信息  |
 
 ### 3、百度（Baidu）
@@ -111,12 +115,14 @@ $wechatConfig = [
 ];
 # 支付宝支付配置
 $alipayConfig = [
-    'app_id'        => '', // 支付宝分配给开发者的应用ID
+    'app_id'        => '', // 开发者的应用ID
     'public_key'    => '', // 支付宝公钥，一行字符串
     'private_key'   => '', // 开发者私钥去头去尾去回车，一行字符串
-    'notify_url'    => '', // 异步接收支付状态 改成自己的回调地址
-    'return_url'    => '', // 同步接收支付状态 改成自己的回调地址
+
+    'notify_url'    => '', // 异步接收支付状态
+    'return_url'    => '', // 同步接收支付状态
     'sign_type'     => 'RSA2', // 生成签名字符串所使用的签名算法类型，目前支持RSA2和RSA，默认使用RSA2
+    'is_sandbox'    => false, // 是否使用沙箱调试，true使用沙箱，false不使用，默认false不使用
 ];
 # 百度支付配置
 $baiduConfig = [

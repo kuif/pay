@@ -64,7 +64,7 @@ class Wechat
      * [__construct 构造函数]
      * @param [type] $config [传递微信支付相关配置]
      */
-    public function __construct($config=NULL, $referer=NULL){
+    public function __construct($config=NULL){
         $config && self::$config = array_merge(self::$config, $config);
         if (self::$config['sp_appid'] && self::$config['sp_mchid']) {
             self::$facilitator = true; // 服务商模式
@@ -515,7 +515,7 @@ class Wechat
                 die("请填写分账详细信息！");
 
             // 分账接收方类型
-            $detail['type'] = isset($v['type']) ? $v['type'] : (mb_strlen($v['account']) < 11 ? 'MERCHANT_ID' : (self::$facilitator ? 'PERSONAL_SUB_OPENID' : 'PERSONAL_OPENID'));
+            $detail['type'] = isset($v['type']) ? $v['type'] : (mb_strlen($v['account']) != 28 ? 'MERCHANT_ID' : (self::$facilitator ? 'PERSONAL_SUB_OPENID' : 'PERSONAL_OPENID'));
             $detail['account'] = $v['account']; // 分账接收方账号
             !empty($v['name']) && $detail['user_name'] = self::getEncrypt($v['name']); // 分账个人接收方姓名
             $detail['amount'] = $v['amount']; // 分账金额
@@ -528,7 +528,7 @@ class Wechat
             'transaction_id'  => $order['transaction_id'], // 微信订单号
             'out_order_no'  => (string)$order['order_sn'], // 商户分账单号
             'receivers' => $list, // 分账接收方列表
-            'unfreeze_unsplit'  => $order['unfreeze'] ?? true, // 商户分账单号
+            'unfreeze_unsplit'  => $order['unfreeze'] ?? true, // 是否解冻剩余未分资金
         );
 
         if (self::$facilitator) {
@@ -571,7 +571,7 @@ class Wechat
     }
 
     /**
-     * [queryTransfer 查询分账/查询分账剩余金额]
+     * [queryTransfer 查询分账结果/查询分账剩余金额]
      * @param  [type]  $order [分账单号等]
      * @return [type]         [description]
      */
@@ -645,7 +645,7 @@ class Wechat
         $params['account'] = $account; // 分账接收方账号
         $name && $params['user_name'] = self::getEncrypt($name); // 分账个人接收方姓名
 
-        $params['type'] = mb_strlen($account) < 11 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
+        $params['type'] = mb_strlen($account) != 28 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
 
         // 与分账方的关系类型
         if (in_array($type, ['STORE', 'STAFF', 'STORE_OWNER', 'PARTNER', 'HEADQUARTER', 'BRAND', 'DISTRIBUTOR', 'USER', 'SUPPLIER'])) {
@@ -685,7 +685,7 @@ class Wechat
         $params['account'] = $account; // 分账接收方账号
         $name && $params['user_name'] = self::getEncrypt($name); // 分账个人接收方姓名
 
-        $params['type'] = mb_strlen($account) < 11 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
+        $params['type'] = mb_strlen($account) != 28 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
 
         if (self::$facilitator) {
             $params['type'] == 'PERSONAL_OPENID' && $params['type'] = 'PERSONAL_SUB_OPENID'; // 服务商跟换分账接收方类型
