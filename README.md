@@ -2,7 +2,8 @@
 
 [![Latest Stable Version](http://poser.pugx.org/fengkui/pay/v)](https://packagist.org/packages/fengkui/pay) [![Total Downloads](http://poser.pugx.org/fengkui/pay/downloads)](https://packagist.org/packages/fengkui/pay) [![Latest Unstable Version](http://poser.pugx.org/fengkui/pay/v/unstable)](https://packagist.org/packages/fengkui/pay) [![License](http://poser.pugx.org/fengkui/pay/license)](https://packagist.org/packages/fengkui/pay)
 
-开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，干脆自己去造了一个简单轮子，整合支付（微信、支付宝、百度、字节跳动）相关开发。
+开发了多次支付，每次都要翻文档、找之前的项目复制过来，费时费事，为了便于支付的开发，  
+干脆自己去造了一个简单轮子，整合支付（微信、支付宝、百度、字节跳动）相关开发。
 
 **！！请先熟悉 相关支付 说明文档！！请具有基本的 debug 能力！！**
 
@@ -16,6 +17,9 @@
 ## 运行环境
 - PHP 7.0+
 - composer
+
+## 使用文档
+- [https://docs.fengkui.net/pay/](https://docs.fengkui.net/pay/)
 
 ## 支持的支付
 ### 1、微信（Wechat）
@@ -174,9 +178,9 @@ class Payment
 ```
 
 ## 赏一杯咖啡吧
-<center class="half">
-    <img src="https://fengkui.net/uploads/images/ali.jpg" width="200px"/><img src="https://fengkui.net/uploads/images/wechat.png" width="200px"/>
-</center>
+<div style="text-align:center">
+    <img src="https://fengkui.net/uploads/images/support.jpg" style="width:500px"/>
+</div>
 
 ## LICENSE
 MIT
