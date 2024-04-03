@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2022-02-26T19:25:26+08:00
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2024-03-27 13:46:40
+ * @Last Modified time: 2024-04-03 09:26:13
  */
 namespace fengkui\Pay;
 
@@ -24,7 +24,7 @@ class Alipay
     private static $gateway;
     // 请求使用的编码格式
     private static $charset = 'utf-8';
-    // 	仅支持JSON
+    //  仅支持JSON
     private static $format='JSON';
     // 调用的接口版本
     private static $version = '1.0';
@@ -88,7 +88,7 @@ class Alipay
             'timestamp' => date('Y-m-d H:i:s'),
             'version'   => self::$version,
             'notify_url' => $config['notify_url'], //异步通知地址
-            'biz_content' => json_encode($requestParams),
+            'biz_content' => json_encode($requestParams, JSON_UNESCAPED_UNICODE),
         );
         $commonParams = array_merge($commonParams, $params);
         // dump($commonParams);die;
@@ -107,42 +107,42 @@ class Alipay
     }
 
     // 发起手机网站支付
-	public static function wap($order){
+    public static function wap($order){
         $order['product_code'] = 'QUICK_WAP_WAY'; // 销售产品码，商家和支付宝签约的产品码。手机网站支付为：QUICK_WAP_WAY
         $params['method'] = 'alipay.trade.wap.pay'; // 接口名称
 
         $params = self::unifiedOrder($order, $params);
         $result = self::buildRequestForm(self::$gateway, $params);
         return $result;
-	}
+    }
 
     // 发起当面付
-	public static function face($order){
+    public static function face($order){
         $order['product_code'] = 'FACE_TO_FACE_PAYMENT';
         empty($order['scene']) && $order['scene'] = 'bar_code'; // 支付场景。bar_code(默认)：当面付条码支付场景； security_code：当面付刷脸支付场景，对应的auth_code为fp开头的刷脸标识串；
         $params['method'] = 'alipay.trade.precreate'; // 接口名称
 
- 		$params = self::unifiedOrder($order, $params);
+        $params = self::unifiedOrder($order, $params);
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
         $result = $result['alipay_trade_precreate_response'];
-		if (isset($result['code']) && $result['code'] != 10000) { // 错误抛出异常
+        if (isset($result['code']) && $result['code'] != 10000) { // 错误抛出异常
             throw new \Exception("[" . $result['code'] . "] " . $result['sub_code']. ' ' . $result['sub_msg']);
-		}
+        }
         return $result;
-	}
+    }
 
     // app支付（JSAPI）
-	public static function app($order){
+    public static function app($order){
         $order['product_code'] = 'QUICK_MSECURITY_PAY'; //销售产品码，商家和支付宝签约的产品码，APP支付为固定值QUICK_MSECURITY_PAY
         $params['method'] = 'alipay.trade.app.pay'; // 接口名称
 
         $result = self::unifiedOrder($order, $params);
         return http_build_query($result);
-	}
+    }
 
     // JSAPI支付（小程序）
-	public static function xcx($order){
+    public static function xcx($order){
         $config = self::$config;
         if(empty($order['order_sn']) || empty($order['total_amount']) || (empty($order['buyer_id']) && empty($order['buyer_open_id']))){
             die("订单数组信息缺失！");
@@ -160,7 +160,7 @@ class Alipay
             throw new \Exception("[" . $result['code'] . "] " . $result['sub_code']. ' ' . $result['sub_msg']);
         }
         return $result;
-	}
+    }
 
     /**
      * [query 查询订单]
@@ -168,19 +168,19 @@ class Alipay
      * @param  boolean $type    [支付宝支付订单编号，是否是支付宝支付订单号]
      * @return [type]           [description]
      */
-	public static function query($orderSn, $type = false) {
+    public static function query($orderSn, $type = false) {
         $order = $type ? ['trade_no' => $orderSn] : ['out_trade_no' => $orderSn];
         $params['method'] = 'alipay.trade.query'; // 接口名称
-		$params = self::unifiedOrder($order, $params, true);
+        $params = self::unifiedOrder($order, $params, true);
 
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
-		$result = $result['alipay_trade_query_response'];
+        $result = $result['alipay_trade_query_response'];
         if (isset($result['code']) && $result['code'] != 10000) { // 错误抛出异常
             throw new \Exception("[" . $result['code'] . "] " . $result['sub_code']. ' ' . $result['sub_msg']);
         }
-		return $result;
-	}
+        return $result;
+    }
 
     /**
      * [close 关闭订单]
@@ -188,19 +188,19 @@ class Alipay
      * @param  boolean $type    [支付宝支付订单编号，是否是支付宝支付订单号]
      * @return [type]           [description]
      */
-	public static function close($orderSn, $type = false) {
+    public static function close($orderSn, $type = false) {
         $order = $type ? ['trade_no' => $orderSn] : ['out_trade_no' => $orderSn];
         $params['method'] = 'alipay.trade.close'; // 接口名称
-		$params = self::unifiedOrder($order, $params, true);
+        $params = self::unifiedOrder($order, $params, true);
 
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
-		$result = $result['alipay_trade_close_response'];
+        $result = $result['alipay_trade_close_response'];
         if (isset($result['code']) && $result['code'] != 10000) { // 错误抛出异常
             throw new \Exception("[" . $result['code'] . "] " . $result['sub_code']. ' ' . $result['sub_msg']);
         }
-		return $result;
-	}
+        return $result;
+    }
 
     // 支付宝异步通知
     public static function notify($response = null){
@@ -238,7 +238,7 @@ class Alipay
         $params = self::unifiedOrder($refund, $params, true);
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
-		$result = $result['alipay_trade_refund_response'];
+        $result = $result['alipay_trade_refund_response'];
         if (isset($result['code']) && $result['code'] != 10000) { // 错误抛出异常
             throw new \Exception("[" . $result['code'] . "] " . $result['sub_code']. ' ' . $result['sub_msg']);
         }
@@ -281,7 +281,7 @@ class Alipay
         );
 
         $params['method'] = 'alipay.fund.trans.uni.transfer'; // 接口名称
-		$params = self::unifiedOrder($order, $params, true);
+        $params = self::unifiedOrder($order, $params, true);
 
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
@@ -324,7 +324,7 @@ class Alipay
         $order['out_request_no'] = (string)$account['order_sn'];
         $order['receiver_list'] = $account['list']; // 分账接收方列表，单次传入最多20个
         $params['method'] = 'alipay.trade.royalty.relation.' . ($type ? 'bind' : 'unbind'); // 接口名称
-		$params = self::unifiedOrder($order, $params, true);
+        $params = self::unifiedOrder($order, $params, true);
 
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
@@ -340,7 +340,7 @@ class Alipay
         $order = ['out_request_no' => $orderSn];
 
         $params['method'] = 'alipay.trade.royalty.relation.batchquery'; // 接口名称
-		$params = self::unifiedOrder($order, $params, true);
+        $params = self::unifiedOrder($order, $params, true);
 
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
@@ -398,18 +398,18 @@ class Alipay
     public static function onsettleQuery($orderSn, $type = false) {
         $order = $type ? ['out_request_no' => $orderSn] : ['trade_no' => $orderSn];
         $params['method'] = 'alipay.trade.' . ($type ? 'royalty.rate' : 'order.onsettle') . '.query'; // 接口名称
-		$params = self::unifiedOrder($order, $params, true);
+        $params = self::unifiedOrder($order, $params, true);
 
         $response = Http::post(self::$gateway . '?charset=' . self::$charset, $params);
         $result = json_decode($response, true);
-		$result = $result['alipay_trade_' . ($type ? 'royalty_rate' : 'order_onsettle') . '_query_response'];
+        $result = $result['alipay_trade_' . ($type ? 'royalty_rate' : 'order_onsettle') . '_query_response'];
         if (isset($result['code']) && $result['code'] != 10000) { // 错误抛出异常
             throw new \Exception("[" . $result['code'] . "] " . $result['sub_code']. ' ' . $result['sub_msg']);
         }
-		return $result;
-	}
+        return $result;
+    }
 
-	// 获取会员信息
+    // 获取会员信息
     public static function doGetUserInfo($token)
     {
         $params['method'] = 'alipay.user.info.share'; // 接口名称
@@ -425,7 +425,7 @@ class Alipay
         return $result;
     }
 
-	/**
+    /**
      * 获取access_token和user_id
      */
     public function getToken($type = true)
@@ -456,7 +456,7 @@ class Alipay
             return $result;
         } else {
             //触发返回code码
-           	$scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on' ? 'https://' : 'http://';
+            $scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on' ? 'https://' : 'http://';
             $redirectUrl = urlencode($scheme.$_SERVER['HTTP_HOST'].$_SERVER['PHP_SELF']);
             $_SERVER['QUERY_STRING'] && $redirectUrl = $baseUrl.'?'.$_SERVER['QUERY_STRING'];
             $urlObj['app_id'] = $config['app_id'];
@@ -524,7 +524,7 @@ class Alipay
             "\n-----END RSA PRIVATE KEY-----";
         ($res) or die('您使用的私钥格式错误，请检查RSA私钥配置');
         if (self::$signType == "RSA2") {
-			//OPENSSL_ALGO_SHA256是php5.4.8以上版本才支持
+            //OPENSSL_ALGO_SHA256是php5.4.8以上版本才支持
             openssl_sign($data, $sign, $res, version_compare(PHP_VERSION,'5.4.0', '<') ? SHA256 : OPENSSL_ALGO_SHA256);
         } else {
             openssl_sign($data, $sign, $res);
@@ -535,8 +535,8 @@ class Alipay
 
     // 验签函数（用于查询支付宝数据）
     protected static function verifySign($data, $sign) {
-    	$public_key = self::$config['public_key'];
-    	$search = [
+        $public_key = self::$config['public_key'];
+        $search = [
             "-----BEGIN PUBLIC KEY-----",
             "-----END PUBLIC KEY-----",
             "\n",
@@ -554,21 +554,21 @@ class Alipay
         return $result;
     }
 
-	/**
+    /**
      * 建立请求，以表单HTML形式构造（默认）
-	 * @param $url 请求地址
+     * @param $url 请求地址
      * @param $params 请求参数数组
      * @return 提交表单HTML文本
      */
     protected static function buildRequestForm($url, $params) {
 
         $sHtml = "<form id='alipaysubmit' name='alipaysubmit' action='".$url."?charset=".self::$charset."' method='POST'>";
-		foreach($params as $key=>$val){
+        foreach($params as $key=>$val){
             if (false === self::checkEmpty($val)) {
                 $val = str_replace("'","&apos;",$val);
                 $sHtml.= "<input type='hidden' name='".$key."' value='".$val."'/>";
             }
-		}
+        }
         //submit按钮控件请不要含有name属性
         $sHtml = $sHtml."<input type='submit' value='ok' style='display:none;''></form>";
         $sHtml = $sHtml."<script>document.forms['alipaysubmit'].submit();</script>";

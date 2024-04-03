@@ -93,7 +93,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
         // dump($params);die;
         $url = self::$createOrderUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }
@@ -117,7 +117,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$queryOrderUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }
@@ -185,7 +185,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$queryOrderUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }
@@ -209,7 +209,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$queryRefundUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }
@@ -271,7 +271,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$settleUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }
@@ -295,7 +295,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$querySettleUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }
@@ -338,7 +338,7 @@ class Bytedance
         ];
 
         $url = self::$addMerchantUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }
@@ -361,7 +361,7 @@ class Bytedance
         $params['sign'] = self::makeSign($params);
 
         $url = self::$addSubMerchantUrl;
-        $response = Http::post($url, json_encode($params));
+        $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE));
         $result = json_decode($response, true);
         return $result;
     }

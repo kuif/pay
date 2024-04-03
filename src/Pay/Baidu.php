@@ -89,7 +89,7 @@ class Baidu
             'dealTitle'     => $order['body'],
             'signFieldsRange' => 1,
             'rsaSign'       => $rsaSign,
-            'bizInfo'       => json_encode($bizInfo),
+            'bizInfo'       => json_encode($bizInfo, JSON_UNESCAPED_UNICODE),
         );
         return $bdOrder;
     }
