@@ -165,19 +165,16 @@ $pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 字节跳动
  * @Last Modified by:   [FENG] <1161634940@qq.com>
  * @Last Modified time: 2021-06-15 15:39:01
  */
-
 require_once('./vendor/autoload.php');
 
-/**
- * 通用支付
- */
+// 通用支付
 class Payment
 {
 
 }
 ```
 
-## 赏一杯咖啡吧
+## 一起喝可乐
 <div style="text-align:center">
     <img src="https://fengkui.net/uploads/images/support.jpg" style="width:500px"/>
 </div>
