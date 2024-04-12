@@ -170,6 +170,56 @@ require_once('./vendor/autoload.php');
 // 通用支付
 class Payment
 {
+    // 支付类实例化
+    protected static $pay = '';
+    // 支付类型
+    protected static $type = '';
+    // 支付相关配置
+    protected static $config = [];
+
+    /**
+     * [_initialize 构造函数(获取支付类型与初始化配置)]
+     * @return [type] [description]
+     */
+    public function _initialize()
+    {
+        self::$type = $_GET['type'] ?? 'alipay';
+        self::config();
+    }
+
+    /**
+     * [config 获取配置]
+     * @param  string $type [description]
+     * @return [type]       [description]
+     */
+    protected static function config($type='')
+    {
+        $type = $type ?: self::$type;
+
+        // 相关配置
+        $alipayConfig = [];
+
+        if (in_array($type, ['wechat', 'baidu', 'bytedance', 'alipay'])) {
+            $config = $type . "Config";
+            self::$config = $config;
+        } else {
+            die('当前类型配置不存在');
+        }
+
+        $type && self::$pay =(new \fengkui\Pay())::$type(self::$config);
+    }
+
+    // 支付方法
+    public function pay()
+    {
+        $order = [
+            'body'      => 'subject-测试', // 商品描述
+            'order_sn'  => time(), // 商户订单号
+            'total_amount' => 0.01, // 订单金额
+        ];
+        $result = self::$pay->web($order); // 直接跳转链接
+        echo $result;
+    }
 
 }
 ```
@@ -178,6 +228,8 @@ class Payment
 <div style="text-align:center">
     <img src="https://fengkui.net/uploads/images/support.jpg" style="width:500px"/>
 </div>
+
+**请备注一起喝可乐，以便感谢支持**
 
 ## LICENSE
 MIT
