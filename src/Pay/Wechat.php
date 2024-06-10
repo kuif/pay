@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2022-02-26 15:10:39
+ * @Last Modified time: 2024-06-09 17:52:41
  */
 namespace fengkui\Pay;
 
@@ -423,7 +423,7 @@ class Wechat
     }
 
     /**
-     * [transfer 付款至用户零钱]
+     * [transfer 商家转账到零钱]
      * @param  array  $order [订单相关信息]
      * @return [type]        [description]
      */
@@ -431,9 +431,10 @@ class Wechat
     {
         $config = self::$config;
         if (empty($order['list']) && isset($order['openid']) && !empty($order['amount']))
-            $order['list'] = [[ 'amount' => $order['amount'], 'openid' => $order['openid']]];
-        if(empty($order['order_sn']) || empty($order['amount']) || empty($order['body']) || empty($order['list']))
+            $order['list'] = [[ 'amount' => (int)$order['amount'], 'openid' => $order['openid']]];
+        if (empty($order['order_sn']) || empty($order['amount']) || empty($order['body']) || empty($order['list']))
             die("订单数组信息缺失！");
+
         $list = [];
         foreach ($order['list'] as $k => $v) {
             $detail = [];
@@ -455,12 +456,16 @@ class Wechat
             'out_batch_no'  => (string)$order['order_sn'], // 商户订单号
             'batch_name'    => $config['name'] ?? $order['body'], // 批次名称
             'batch_remark'  => $order['body'], // 批次备注
-            'total_amount'  => $order['amount'], // 转账总金额
+            'total_amount'  => (int)$order['amount'], // 转账总金额
             'total_num'     => count($list), // 转账总金额
             'transfer_detail_list' => $list, // 付款备注
         );
 
+        !empty($order['scene_id']) && $params['transfer_scene_id'] = (string)$order['scene_id']; // 该批次转账使用的转账场景
+        !empty($order['notify_url']) && $params['notify_url'] = $order['notify_url']; // 异步接收微信支付结果通知的回调地址，通知url必须为公网可访问的url，必须为https，不能携带参数。
+
         $url = self::$batchesUrl;
+        self::$facilitator = false; // 关闭服务商模式
         $header = self::createAuthorization($url, $params, 'POST');
         $header[] = 'Wechatpay-Serial: ' . $config['serial_no'];
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
