@@ -1,6 +1,6 @@
 {
     "name": "fengkui/pay",
-    "description": "以最简单的方式，整合微信、支付宝、百度、字节跳动支付。",
+    "description": "以最简单的方式，整合微信支付、支付宝支付、银联支付、百度支付、字节跳动支付。",
     "license": "MIT",
     "authors": [
         {

@@ -69,7 +69,17 @@
 |  getToken  |  获取access_token和user_id  |
 |  doGetUserInfo  |  获取会员信息  |
 
-### 3、百度（Baidu）
+### 3、银联（Union）
+
+|  method  |  描述  |
+| :-------: | :-------:   |
+|  web  |  电脑在线网关支付  |
+|  wap  |  手机网页支付  |
+|  query  |  查询订单  |
+|  notify  |  银联异步通知  |
+|  refund  |  订单退款/交易撤销  |
+
+### 4、百度（Baidu）
 
 |  method  |  描述  |
 | :-------: | :-------:   |
@@ -77,7 +87,7 @@
 |  refund  |  申请退款  |
 |  notify  |  支付结果通知  |
 
-### 4、字节跳动（Bytedance）
+### 5、字节跳动（Bytedance）
 
 |  method  |  描述  |
 | :-------: | :-------:   |
@@ -128,6 +138,20 @@ $alipayConfig = [
     'sign_type'     => 'RSA2', // 生成签名字符串所使用的签名算法类型，目前支持RSA2和RSA，默认使用RSA2
     'is_sandbox'    => false, // 是否使用沙箱调试，true使用沙箱，false不使用，默认false不使用
 ];
+# 银联支付配置
+$unionConfig = [
+    'mchid'         => '', // 商户号
+    'sign_pwd'      => '', //商户私钥证书密码
+    'sign_path'     => './cert/acp_test_sign.pfx', //商户私钥证书（签名使用）5.1.0
+    // 'sign_path'     => './cert/700000000000001_acp.pfx', //签名证书路径5.0.0
+    'verify_path'   => './cert/verify_sign_acp.cer', //银联公钥证书（商户验签使用） 
+    'acp_root'      => './cert/acp_test_root.cer', //根证书 
+    'acp_middle'    => './cert/acp_test_middle.cer', //中级证书 
+
+    'notify_url'    => '', // 异步接收支付状态
+    'return_url'    => '', // 同步接收支付状态
+    'is_sandbox'    => true, // 是否使用沙箱调试，true使用沙箱，false不使用，默认false不使用
+];
 # 百度支付配置
 $baiduConfig = [
     'deal_id'       => '', // 百度收银台的财务结算凭证
@@ -152,6 +176,7 @@ $bytedanceConfig = [
 ```php
 $pay = new \fengkui\Pay\Wechat($wechatConfig); // 微信
 $pay = new \fengkui\Pay\Alipay($alipayConfig); // 支付宝
+$pay = new \fengkui\Pay\Unionpay($unionConfig); // 银联
 $pay = new \fengkui\Pay\Baidu($baiduConfig); // 百度
 $pay = new \fengkui\Pay\Bytedance($bytedanceConfig); // 字节跳动
 ```
@@ -199,7 +224,7 @@ class Payment
         // 相关配置
         $alipayConfig = [];
 
-        if (in_array($type, ['wechat', 'baidu', 'bytedance', 'alipay'])) {
+        if (in_array($type, ['wechat', 'baidu', 'bytedance', 'alipay', 'union'])) {
             $config = $type . "Config";
             self::$config = $config;
         } else {
