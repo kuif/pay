@@ -36,7 +36,7 @@ class Unionpay
         'notify_url'    => '', // 异步接收支付状态
         'return_url'    => '', // 同步接收支付状态
 
-        'is_sandbox'    => true, // 是否使用沙箱调试，true使用沙箱，false不使用，默认false不使用
+        'is_sandbox'    => false, // 是否使用沙箱调试，true使用沙箱，false不使用，默认false不使用
     );
 
     /**
