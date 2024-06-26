@@ -886,7 +886,7 @@ class Wechat
         $config = self::$config;
         $publicKey = @file_get_contents($config['public_key']);
         $encrypted = '';
-        if (openssl_public_encrypt($str, $encrypted, $public_key, OPENSSL_PKCS1_OAEP_PADDING)) {
+        if (openssl_public_encrypt($str, $encrypted, $publicKey, OPENSSL_PKCS1_OAEP_PADDING)) {
             //base64编码
             $sign = base64_encode($encrypted);
         } else {
