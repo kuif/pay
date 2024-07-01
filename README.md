@@ -37,8 +37,8 @@
 |  notify  |  支付结果通知  |
 |  refund  |  申请退款  |
 |  queryRefund  |  查询退款  |
-|  transfer  |  转账到零钱(v2)  |
-|  queryTransfer  |  查询转账到零钱(v2)  |
+|  transfer  |  转账到零钱  |
+|  queryTransfer  |  查询转账到零钱  |
 |  profitSharing  |  请求分账  |
 |  profitsharingUnfreeze  |  解冻剩余资金  |
 |  queryProfitsharing  |  查询分账结果/查询分账剩余金额  |
