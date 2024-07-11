@@ -742,7 +742,8 @@ class Wechat
 
         // 解析url地址
         $url_parts = parse_url($url);
-        $url = ($url_parts['path'] . (!empty($url_parts['query']) ? "?${url_parts['query']}" : ""));
+        $url = $url_parts['path'] . (!empty($url_parts['query']) ? '?'.$url_parts['query'] : "");
+
         if (strtolower($method) == 'get') {
             $query_string = ($params && is_array($params)) ? http_build_query($params) : $params;
             $url = $query_string ? $url . (stripos($url, "?") !== false ? "&" : "?") . $query_string : $url;
