@@ -730,7 +730,7 @@ class Wechat
         $config = self::$config;
         // 商户号（服务商模式使用服务商商户号）
         $mchid = self::$facilitator ? $config['sp_mchid'] : $config['mchid'];
-        // $mchid = $config['mchid'];
+        $method = strtoupper($method);
         // 证书序列号
         if (empty($config['serial_no'])) {
             $certFile = @file_get_contents($config['cert_client']);
@@ -739,12 +739,10 @@ class Wechat
         } else {
             $serial_no = $config['serial_no'];
         }
-
         // 解析url地址
         $url_parts = parse_url($url);
-        $url = $url_parts['path'] . (!empty($url_parts['query']) ? '?'.$url_parts['query'] : "");
-
-        if (strtolower($method) == 'get') {
+        $url = ($url_parts['path'] . (!empty($url_parts['query']) ? "?${url_parts['query']}" : ""));
+        if (in_array($method, ['GET'])) {
             $query_string = ($params && is_array($params)) ? http_build_query($params) : $params;
             $url = $query_string ? $url . (stripos($url, "?") !== false ? "&" : "?") . $query_string : $url;
         }
@@ -754,7 +752,7 @@ class Wechat
             'url'   => $url,
             'time'  => time(), // 当前时间戳
             'nonce' => self::get_rand_str(32, 0, 1), // 随机32位字符串
-            'data'  => strtolower($method) == 'post' ? json_encode($params, JSON_UNESCAPED_UNICODE) : '', // POST请求时 需要 转JSON字符串
+            'data'  => ($params && in_array($method, ['POST', 'PUT', 'DELETE'])) ? json_encode($params, JSON_UNESCAPED_UNICODE) : '', // POST请求时 需要 转JSON字符串
         ];
         $sign = self::makeSign($body);
         // Authorization 类型
