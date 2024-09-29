@@ -524,7 +524,7 @@ class Wechat
             $detail['account'] = $v['account']; // 分账接收方账号
             !empty($v['name']) && $detail['user_name'] = self::getEncrypt($v['name']); // 分账个人接收方姓名
             $detail['amount'] = $v['amount']; // 分账金额
-            $detail['description'] = $v['remark'] ?? ($order['body'] ?? '商家发起分账'); // 分账描述
+            $detail['description'] = $v['description'] ?? ($order['description'] ?? '商家发起分账'); // 分账描述
 
             $list[] = $detail;
         }
@@ -546,6 +546,7 @@ class Wechat
 
         $url = self::$profitSharingUrl . '/orders';
         $header = self::createAuthorization($url, $params, 'POST');
+        $header[] = 'Wechatpay-Serial: ' . $config['serial_no'];
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
@@ -671,6 +672,7 @@ class Wechat
 
         $url = self::$profitSharingUrl . '/receivers/add';
         $header = self::createAuthorization($url, $params, 'POST');
+        $header[] = 'Wechatpay-Serial: ' . $config['serial_no'];
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
