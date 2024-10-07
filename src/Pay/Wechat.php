@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2024-06-09 17:52:41
+ * @Last Modified time: 2024-10-07 16:44:05
  */
 namespace fengkui\Pay;
 
@@ -345,9 +345,10 @@ class Wechat
                 'data' => $response,
             ];
             // 验证应答签名
-            $verifySign = self::verifySign($body, trim($server['HTTP_WECHATPAY_SIGNATURE']), trim($server['HTTP_WECHATPAY_SERIAL']));
-            if (!$verifySign)
+            $verifySign = self::verifySign($body, trim($server['HTTP_WECHATPAY_SIGNATURE']));
+            if (!$verifySign) {
                 throw new \Exception("[ 401 ] SIGN_ERROR 签名错误");
+            }
         }
         $result = json_decode($response, true);
         if (empty($result) || $result['event_type'] != 'TRANSACTION.SUCCESS' || $result['summary'] != '支付成功') {
@@ -467,7 +468,7 @@ class Wechat
         $url = self::$batchesUrl;
         self::$facilitator = false; // 关闭服务商模式
         $header = self::createAuthorization($url, $params, 'POST');
-        $header[] = 'Wechatpay-Serial: ' . $config['serial_no'];
+        $header[] = 'Wechatpay-Serial: ' . self::certificates(false);
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
@@ -546,7 +547,7 @@ class Wechat
 
         $url = self::$profitSharingUrl . '/orders';
         $header = self::createAuthorization($url, $params, 'POST');
-        $header[] = 'Wechatpay-Serial: ' . $config['serial_no'];
+        $header[] = 'Wechatpay-Serial: ' . self::certificates(false);
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
@@ -672,7 +673,7 @@ class Wechat
 
         $url = self::$profitSharingUrl . '/receivers/add';
         $header = self::createAuthorization($url, $params, 'POST');
-        $header[] = 'Wechatpay-Serial: ' . $config['serial_no'];
+        $header[] = 'Wechatpay-Serial: ' . self::certificates(false);
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
@@ -691,7 +692,6 @@ class Wechat
 
         $params['account'] = $account; // 分账接收方账号
         $name && $params['user_name'] = self::getEncrypt($name); // 分账个人接收方姓名
-
         $params['type'] = mb_strlen($account) != 28 ? 'MERCHANT_ID' : 'PERSONAL_OPENID'; // 分账接收方类型
 
         if (self::$facilitator) {
@@ -728,7 +728,7 @@ class Wechat
      * @return [type]           [description]
      */
     // 生成v3 Authorization
-    protected static function createAuthorization($url, $params=[], $method='POST'){
+    public static function createAuthorization($url, $params=[], $method='POST') {
         $config = self::$config;
         // 商户号（服务商模式使用服务商商户号）
         $mchid = self::$facilitator ? $config['sp_mchid'] : $config['mchid'];
@@ -747,6 +747,7 @@ class Wechat
         if (in_array($method, ['GET'])) {
             $query_string = ($params && is_array($params)) ? http_build_query($params) : $params;
             $url = $query_string ? $url . (stripos($url, "?") !== false ? "&" : "?") . $query_string : $url;
+            $params = '';
         }
         // 生成签名
         $body = [
@@ -754,7 +755,7 @@ class Wechat
             'url'   => $url,
             'time'  => time(), // 当前时间戳
             'nonce' => self::get_rand_str(32, 0, 1), // 随机32位字符串
-            'data'  => ($params && in_array($method, ['POST', 'PUT', 'DELETE'])) ? json_encode($params, JSON_UNESCAPED_UNICODE) : '', // POST请求时 需要 转JSON字符串
+            'data'  => is_array($params) ? json_encode($params, JSON_UNESCAPED_UNICODE) : $params, // POST/PUT/DELETE请求时 需要 转JSON字符串
         ];
         $sign = self::makeSign($body);
         // Authorization 类型
@@ -799,10 +800,9 @@ class Wechat
      * [verifySign 验证签名]
      * @param  [type] $data   [description]
      * @param  [type] $sign   [description]
-     * @param  [type] $serial [description]
      * @return [type]         [description]
      */
-    public static function verifySign($data, $sign, $serial)
+    public static function verifySign($data, $sign)
     {
         $config = self::$config;
         if (!in_array('sha256WithRSAEncryption', \openssl_get_md_methods(true))) {
@@ -815,7 +815,7 @@ class Wechat
             $message .= $value . "\n";
         }
         // 获取证书相关信息（平台公钥）
-        $publicKey = self::certificates($serial);
+        $publicKey = self::certificates();
         // 验证签名
         $recode = \openssl_verify($message, $sign, $publicKey, 'sha256WithRSAEncryption');
         return $recode == 1 ? true : false;
@@ -837,15 +837,15 @@ class Wechat
      * [certificates 获取证书]
      * @return [type] [description]
      */
-    public static function certificates($serial)
+    public static function certificates($type = true)
     {
         $config = self::$config;
 
         $publicKey = @file_get_contents($config['public_key']);
         if ($publicKey) { // 判断证书是否存在
-            $openssl = openssl_x509_parse($publicKey);
-            if ($openssl['serialNumberHex'] == $serial && $openssl['validTo_time_t'] > time()) { // 是否是所需证书
-                return $publicKey; // 返回证书信息
+            $certificate = openssl_x509_parse($publicKey);
+            if ($certificate['validTo_time_t'] > time()) { // 是否是所需证书
+                return $type ? $publicKey : $certificate['serialNumberHex']; // 返回证书信息
             }
         }
 
@@ -859,7 +859,7 @@ class Wechat
             throw new \Exception("[" . $result['code'] . "] " . $result['message']);
         }
         foreach ($result['data'] as $key => $certificate) {
-            if ($certificate['serial_no'] == $serial && strtotime($certificate['expire_time']) > time()) {
+            if (strtotime($certificate['expire_time']) > time()) {
                 $publicKey = self::decryptToString(
                     $certificate['encrypt_certificate']['associated_data'],
                     $certificate['encrypt_certificate']['nonce'],
@@ -868,7 +868,7 @@ class Wechat
 
                 if ($publicKey) { // 生成public_key证书文件
                     file_put_contents($config['public_key'], $publicKey);
-                    return $publicKey; // 返回证书信息
+                    return $type ? $publicKey : $certificate['serial_no']; // 返回证书信息
                     break; // 终止循环
                 } else {
                     throw new \Exception("[ 404 ] public_key 生成失败，加密字符串解析为空，请检查配置 key 是否匹配");
@@ -882,10 +882,9 @@ class Wechat
      * @param  [type] $str [description]
      * @return [type]      [description]
      */
-    private function getEncrypt($str) {
+    public static function getEncrypt($str) {
         //$str是待加密字符串
-        $config = self::$config;
-        $publicKey = @file_get_contents($config['public_key']);
+        $publicKey = self::certificates();
         $encrypted = '';
         if (openssl_public_encrypt($str, $encrypted, $publicKey, OPENSSL_PKCS1_OAEP_PADDING)) {
             //base64编码
