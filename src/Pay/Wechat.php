@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2024-10-07 16:44:05
+ * @Last Modified time: 2024-10-10 08:57:27
  */
 namespace fengkui\Pay;
 
@@ -743,7 +743,7 @@ class Wechat
         }
         // 解析url地址
         $url_parts = parse_url($url);
-        $url = ($url_parts['path'] . (!empty($url_parts['query']) ? "?${url_parts['query']}" : ""));
+        $url = $url_parts['path'] . (!empty($url_parts['query']) ? '?'.$url_parts['query'] : "");
         if (in_array($method, ['GET'])) {
             $query_string = ($params && is_array($params)) ? http_build_query($params) : $params;
             $url = $query_string ? $url . (stripos($url, "?") !== false ? "&" : "?") . $query_string : $url;
