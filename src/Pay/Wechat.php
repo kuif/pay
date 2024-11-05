@@ -54,10 +54,14 @@ class Wechat
         'redirect_url'  => '', // 公众号支付，调起支付页面
 
         // 服务商模式下，使用服务商证书
-        'serial_no'     => '', // 证书序列号（可不传，默认根据证书直接获取）
+        'serial_no'     => '', // 商户API证书序列号（可不传，默认根据证书直接获取）
         'cert_client'   => './cert/apiclient_cert.pem', // 证书（退款，红包时使用）
-        'cert_key'      => './cert/apiclient_key.pem', // 商户私钥（Api安全中下载）
-        'public_key'    => './cert/public_key.pem', // 平台公钥（调动证书列表，自动生成，注意目录权限）
+        'cert_key'      => './cert/apiclient_key.pem', // 商户API证书私钥（Api安全中下载）
+
+        'public_key_id' => '', // 平台证书序列号或支付公钥ID
+        // （支付公钥ID请带：PUB_KEY_ID_ 前缀，默认根据证书直接获取，不带前缀）
+        'public_key'    => './cert/public_key.pem', // 平台证书或支付公钥（Api安全中下载）
+        // （新版已不支持：平台证书，老版调用证书列表，自动生成平台证书，注意目录权限）
     );
 
     /**
@@ -345,7 +349,7 @@ class Wechat
                 'data' => $response,
             ];
             // 验证应答签名
-            $verifySign = self::verifySign($body, trim($server['HTTP_WECHATPAY_SIGNATURE']));
+            $verifySign = self::verifySign($body, trim($server['HTTP_WECHATPAY_SIGNATURE']), trim($server['HTTP_WECHATPAY_SERIAL']));
             if (!$verifySign) {
                 throw new \Exception("[ 401 ] SIGN_ERROR 签名错误");
             }
@@ -468,7 +472,7 @@ class Wechat
         $url = self::$batchesUrl;
         self::$facilitator = false; // 关闭服务商模式
         $header = self::createAuthorization($url, $params, 'POST');
-        $header[] = 'Wechatpay-Serial: ' . self::certificates(false);
+        $header[] = 'Wechatpay-Serial: ' . ($config['public_key_id'] ?? self::certificates(false));
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
@@ -547,7 +551,7 @@ class Wechat
 
         $url = self::$profitSharingUrl . '/orders';
         $header = self::createAuthorization($url, $params, 'POST');
-        $header[] = 'Wechatpay-Serial: ' . self::certificates(false);
+        $header[] = 'Wechatpay-Serial: ' . ($config['public_key_id'] ?? self::certificates(false));
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
@@ -673,7 +677,7 @@ class Wechat
 
         $url = self::$profitSharingUrl . '/receivers/add';
         $header = self::createAuthorization($url, $params, 'POST');
-        $header[] = 'Wechatpay-Serial: ' . self::certificates(false);
+        $header[] = 'Wechatpay-Serial: ' . ($config['public_key_id'] ?? self::certificates(false));
         $response = Http::post($url, json_encode($params, JSON_UNESCAPED_UNICODE), $header);
         $result = json_decode($response, true);
 
@@ -800,9 +804,10 @@ class Wechat
      * [verifySign 验证签名]
      * @param  [type] $data   [description]
      * @param  [type] $sign   [description]
+     * @param  [type] $serial [description]
      * @return [type]         [description]
      */
-    public static function verifySign($data, $sign)
+    public static function verifySign($data, $sign, $serial)
     {
         $config = self::$config;
         if (!in_array('sha256WithRSAEncryption', \openssl_get_md_methods(true))) {
@@ -815,7 +820,7 @@ class Wechat
             $message .= $value . "\n";
         }
         // 获取证书相关信息（平台公钥）
-        $publicKey = self::certificates();
+        $publicKey = self::certificates(true, $serial);
         // 验证签名
         $recode = \openssl_verify($message, $sign, $publicKey, 'sha256WithRSAEncryption');
         return $recode == 1 ? true : false;
@@ -837,7 +842,7 @@ class Wechat
      * [certificates 获取证书]
      * @return [type] [description]
      */
-    public static function certificates($type = true)
+    public static function certificates($type = true, $serial = '')
     {
         $config = self::$config;
 
@@ -845,6 +850,9 @@ class Wechat
         if ($publicKey) { // 判断证书是否存在
             $certificate = openssl_x509_parse($publicKey);
             if ($certificate['validTo_time_t'] > time()) { // 是否是所需证书
+                if ($serial && $certificate['serialNumberHex'] != $serial) {
+                    throw new \Exception("[ 401 ] 微信支付公钥ID或平台证书序列号匹配失败");
+                }
                 return $type ? $publicKey : $certificate['serialNumberHex']; // 返回证书信息
             }
         }
@@ -856,7 +864,7 @@ class Wechat
         $response = Http::get($url, $params, $header);
         $result = json_decode($response, true);
         if (empty($result['data'])) {
-            throw new \Exception("[" . $result['code'] . "] " . $result['message']);
+            throw new \Exception("[" . $result['code'] . "] " . $result['message'] . "，请使用微信支付公钥验签及数据加密");
         }
         foreach ($result['data'] as $key => $certificate) {
             if (strtotime($certificate['expire_time']) > time()) {
