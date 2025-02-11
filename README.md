@@ -36,12 +36,13 @@
 |  close  |  关闭订单  |
 |  notify  |  支付结果通知  |
 |  refund  |  申请退款  |
-|  queryRefund  |  查询退款  |
-|  transfer  |  转账到零钱  |
-|  queryTransfer  |  查询转账到零钱  |
+|  refundQuery  |  查询退款  |
+|  transfer  |  商家转账  |
+|  transferQuery  |  查询商家转账  |
+|  transferCancel  |  撤销商家转账  |
 |  profitSharing  |  请求分账  |
 |  profitsharingUnfreeze  |  解冻剩余资金  |
-|  queryProfitsharing  |  查询分账结果/查询分账剩余金额  |
+|  profitsharingQuery  |  查询分账结果/查询分账剩余金额  |
 |  profitsharingReturn  |  请求分账回退  |
 |  receiversAdd  |  添加分账接收方  |
 |  receiversDelete  |  删除分账接收方  |

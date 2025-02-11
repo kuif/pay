@@ -30,8 +30,10 @@ class Wechat
     private static $partnerTransactionsUrl = 'https://api.mch.weixin.qq.com/v3/pay/partner/transactions/';
     // 申请退款
     private static $refundUrl = 'https://api.mch.weixin.qq.com/v3/refund/domestic/refunds';
-    // 商家转账到零钱
-    private static $batchesUrl = 'https://api.mch.weixin.qq.com/v3/transfer/batches';
+    // 商家转账
+    // private static $batchesUrl = 'https://api.mch.weixin.qq.com/v3/transfer/batches';
+    private static $transferBillsUrl = 'https://api.mch.weixin.qq.com/v3/fund-app/mch-transfer/transfer-bills';
+    
     // 请求分账
     private static $profitSharingUrl = 'https://api.mch.weixin.qq.com/v3/profitsharing';
     // 静默授权，获取code
@@ -254,7 +256,7 @@ class Wechat
                 'prepayid'  => $result['prepay_id'],
             );
             $data['paySign'] = self::makeSign($data);
-            $data['partnerid'] = $config['mchid'];
+            $data['partnerid'] = self::$config['mchid'];
             $data['package'] = 'Sign=WXPay';
             return $data; // 数据小程序客户端
         } else {
@@ -406,11 +408,11 @@ class Wechat
     }
 
     /**
-     * [queryRefund 查询退款]
+     * [refundQuery 查询退款]
      * @param  [type] $refundSn [退款单号]
      * @return [type]           [description]
      */
-    public static function queryRefund($refundSn)
+    public static function refundQuery($refundSn)
     {
         $config = self::$config;
         $url = self::$refundUrl . '/' . $refundSn;
@@ -428,48 +430,35 @@ class Wechat
     }
 
     /**
-     * [transfer 商家转账到零钱]
+     * [transfer 商家转账]
      * @param  array  $order [订单相关信息]
      * @return [type]        [description]
      */
     public static function transfer($order = [])
     {
         $config = self::$config;
-        if (empty($order['list']) && isset($order['openid']) && !empty($order['amount']))
-            $order['list'] = [[ 'amount' => (int)$order['amount'], 'openid' => $order['openid']]];
-        if (empty($order['order_sn']) || empty($order['amount']) || empty($order['body']) || empty($order['list']))
+        if (empty($order['order_sn']) || empty($order['openid']) || empty($order['amount']) || empty($order['remark']) || empty($order['scene_id']) || empty($order['scene_info']))
             die("订单数组信息缺失！");
 
-        $list = [];
-        foreach ($order['list'] as $k => $v) {
-            $detail = [];
-            if (empty($v['amount']) || empty($v['openid']))
-                die("请填写转账详细信息！");
-            if ($v['amount'] >= 2000 && empty($v['name']))
-                die("单笔金额大于两千，请填写用户姓名");
-
-            $detail['out_detail_no'] = $v['order_sn'] ?? $order['order_sn'] . $k; // 商家明细单号
-            $detail['transfer_amount'] = $v['amount']; // 转账金额
-            $detail['transfer_remark'] = $v['remark'] ?? $order['body']; // 单条转账备注（微信用户会收到该备注）
-            $detail['openid'] = $v['openid']; // 用户在直连商户应用下的用户标示
-            !empty($v['name']) && $detail['user_name'] = self::getEncrypt($v['name']); // 收款用户姓名
-            $list[] = $detail;
-        }
-
+        if ($order['amount'] >= 2000 && empty($order['name']))
+            die("单笔金额大于两千，请填写用户姓名");
+            
         $params = array(
-            'appid'         => $config['appid'] ?: $config['xcxid'], // 商户账号appid
-            'out_batch_no'  => (string)$order['order_sn'], // 商户订单号
-            'batch_name'    => $config['name'] ?? $order['body'], // 批次名称
-            'batch_remark'  => $order['body'], // 批次备注
-            'total_amount'  => (int)$order['amount'], // 转账总金额
-            'total_num'     => count($list), // 转账总金额
-            'transfer_detail_list' => $list, // 付款备注
+            'appid'             => $config['appid'] ?: $config['xcxid'], // 商户账号appid,企业号corpid即为此AppID）
+            'out_bill_no'       => (string)$order['order_sn'], // 商户订单号
+            'transfer_scene_id' => (string)$order['scene_id'], // 转账场景ID
+            'openid'            => (string)$order['openid'], // 商户订单号
+
+            'transfer_amount'   => $order['amount'], // 转账金额(分)
+            'transfer_remark'   => $order['remark'], // 转账备注（微信用户会收到该备注）
+            'transfer_scene_report_infos' => $order['scene_info'], // 转账场景下需报备的内容
         );
 
-        !empty($order['scene_id']) && $params['transfer_scene_id'] = (string)$order['scene_id']; // 该批次转账使用的转账场景
+        !empty($order['name']) && $params['user_name'] = self::getEncrypt($order['name']); // 收款方真实姓名
         !empty($order['notify_url']) && $params['notify_url'] = $order['notify_url']; // 异步接收微信支付结果通知的回调地址，通知url必须为公网可访问的url，必须为https，不能携带参数。
+        !empty($order['body']) && $params['user_recv_perception'] = $order['body']; // 用户收款时感知到的收款原因将根据转账场景自动展示默认内容
 
-        $url = self::$batchesUrl;
+        $url = self::$transferBillsUrl;
         self::$facilitator = false; // 关闭服务商模式
         $header = self::createAuthorization($url, $params, 'POST');
         $header[] = 'Wechatpay-Serial: ' . ($config['public_key_id'] ?? self::certificates(false));
@@ -480,23 +469,30 @@ class Wechat
     }
 
     /**
-     * [queryTransfer 查询转账到零钱]
-     * @param  [type]  $order [相关单号及批次查询]
-     * @param  boolean $type  [是否为微信批次单号查询]
-     * @return [type]         [description]
+     * [transferCancel 撤销商家转账]
+     * @param  [type]  $orderSn [商户单号]
+     * @return [type]           [description]
      */
-    public static function queryTransfer($order, $type = false)
+    public static function transferCancel($orderSn)
     {
-        if (empty($order['order_sn']) || ($type && empty($order['detail_sn'])))
-            die("转账单号缺失");
+        $url = self::$transferBillsUrl . '/out-bill-no/' . $orderSn . '/cancel';
+        
+        $header = self::createAuthorization($url, $params = '', 'GET');
+        $response = Http::get($url, $params, $header);
+        $result = json_decode($response, true);
 
-        if ($type) {
-            $url = self::$batchesUrl . '/batch-id/' . $order['order_sn']; // 微信批次单号查询批次单API
-            empty($order['detail_sn']) || $url .= '/details/detail-id/' . $order['detail_sn']; // 微信明细单号查询明细单API
-        } else {
-            $url = self::$batchesUrl . '/out-batch-no/' . $order['order_sn']; // 商家批次单号查询批次单API
-            empty($order['detail_sn']) || $url .= '/details/out-detail-no/' . $order['detail_sn']; // 商家明细单号查询明细单API
-        }
+        return $result;
+    }
+
+    /**
+     * [transferQuery 查询商家转账]
+     * @param  [type]  $orderSn [商户单号/微信批次单号]
+     * @param  boolean $type    [是否为微信批次单号查询]
+     * @return [type]           [description]
+     */
+    public static function transferQuery($orderSn, $type = false)
+    {
+        $url = self::$transferBillsUrl . ($type ? '/transfer-bill-no/' . $orderSn : '/out-bill-no/' . $orderSn);
 
         $header = self::createAuthorization($url, $params = '', 'GET');
         $response = Http::get($url, $params, $header);
@@ -559,7 +555,7 @@ class Wechat
     }
 
     /**
-     * [queryTransfer 解冻剩余资金]
+     * [transferQuery 解冻剩余资金]
      * @param  [type]  $order [商户单号及微信单号]
      * @return [type]         [description]
      */
@@ -582,11 +578,11 @@ class Wechat
     }
 
     /**
-     * [queryTransfer 查询分账结果/查询分账剩余金额]
+     * [profitsharingQuery 查询分账结果/查询分账剩余金额]
      * @param  [type]  $order [分账单号等]
      * @return [type]         [description]
      */
-    public static function queryProfitsharing($order = [])
+    public static function profitsharingQuery($order = [])
     {
         if (is_array($order) && (empty($order['transaction_id']) || empty($order['order_sn']))) {
             die("支付单号缺失");
