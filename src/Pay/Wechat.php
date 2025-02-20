@@ -384,7 +384,7 @@ class Wechat
             'out_refund_no' => (string)$order['refund_sn'], // 商户退款单号
             'funds_account' => 'AVAILABLE', // 退款资金来源
             'amount' => [
-                    'refund' => $order['refund_amount'],
+                    'refund' => (int)$order['refund_amount'],
                     'currency' => 'CNY',
                 ]
         );
@@ -395,8 +395,9 @@ class Wechat
             $params['out_trade_no'] = $order['order_sn'];
             $orderDetail = self::query($order['order_sn']);
         }
-        $params['amount']['total'] = $orderDetail['amount']['total'];
+        $params['amount']['total'] = (int)$orderDetail['amount']['total'];
         empty($order['reason']) || $params['reason'] = $order['reason'];
+        empty($order['notify_url']) || $params['notify_url'] = $order['notify_url'];
         self::$facilitator && $params['sub_mchid'] = $config['mchid']; // 子商户的商户号
 
         $url = self::$refundUrl;
