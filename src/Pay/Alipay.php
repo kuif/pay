@@ -97,22 +97,35 @@ class Alipay
     }
 
     // 电脑网页支付
-    public static function web($order){
+    public static function web($order, $method='get'){
         $order['product_code'] = 'FAST_INSTANT_TRADE_PAY'; // 销售产品码，与支付宝签约的产品码名称。注：目前电脑支付场景下仅支持FAST_INSTANT_TRADE_PAY
         $params['method'] = 'alipay.trade.page.pay'; // 接口名称
 
         $params = self::unifiedOrder($order, $params);
-        $result = self::buildRequestForm(self::$gateway, $params);
+        if($method=='get'){
+            $preString=self::getSignContent($params, true);
+            //拼接GET请求串
+            $result = self::$gateway."?".$preString;
+        }else{
+            $result = self::buildRequestForm(self::$gateway, $params);
+        }
+        
         return $result;
     }
 
     // 发起手机网站支付
-    public static function wap($order){
+    public static function wap($order, $method='get'){
         $order['product_code'] = 'QUICK_WAP_WAY'; // 销售产品码，商家和支付宝签约的产品码。手机网站支付为：QUICK_WAP_WAY
         $params['method'] = 'alipay.trade.wap.pay'; // 接口名称
 
         $params = self::unifiedOrder($order, $params);
-        $result = self::buildRequestForm(self::$gateway, $params);
+        if($method=='get'){
+            $preString=self::getSignContent($params, true);
+            //拼接GET请求串
+            $result = self::$gateway."?".$preString;
+        }else{
+            $result = self::buildRequestForm(self::$gateway, $params);
+        }
         return $result;
     }
 
@@ -469,7 +482,11 @@ class Alipay
         }
     }
 
-    protected static function getSignContent($params) {
+    /**
+     * 拼接GET请求相关参数
+     * $urlencode相关参数encode
+     */
+    public static function getSignContent($params, $urlencode = false) {
         ksort($params);
         $stringToBeSigned = "";
         $i = 0;
@@ -478,9 +495,9 @@ class Alipay
                 // 转换成目标字符集
                 $v = self::characet($v, self::$charset);
                 if ($i == 0) {
-                    $stringToBeSigned .= "$k" . "=" . "$v";
+                    $stringToBeSigned .= "$k" . "=" . ($urlencode ? urlencode($v) : "$v");
                 } else {
-                    $stringToBeSigned .= "&" . "$k" . "=" . "$v";
+                    $stringToBeSigned .= "&" . "$k" . "=" . ($urlencode ? urlencode($v) : "$v");
                 }
                 $i++;
             }
