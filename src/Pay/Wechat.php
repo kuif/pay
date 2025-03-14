@@ -3,7 +3,7 @@
  * @Author: [FENG] <1161634940@qq.com>
  * @Date:   2019-09-06 09:50:30
  * @Last Modified by:   [FENG] <1161634940@qq.com>
- * @Last Modified time: 2024-10-10 08:57:27
+ * @Last Modified time: 2025-03-14 22:13:12
  */
 namespace fengkui\Pay;
 
@@ -357,7 +357,8 @@ class Wechat
             }
         }
         $result = json_decode($response, true);
-        if (empty($result) || $result['event_type'] != 'TRANSACTION.SUCCESS' || $result['summary'] != '支付成功') {
+        $event_type_array = ['TRANSACTION.SUCCESS', 'MCHTRANSFER.BILL.FINISHED'];
+        if (empty($result['event_type']) || !in_array($result['event_type'], $event_type_array)) {
             return false;
         }
         // 加密信息
