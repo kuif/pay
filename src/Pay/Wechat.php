@@ -442,7 +442,7 @@ class Wechat
         if (empty($order['order_sn']) || empty($order['openid']) || empty($order['amount']) || empty($order['remark']) || empty($order['scene_id']) || empty($order['scene_info']))
             die("订单数组信息缺失！");
 
-        if ($order['amount'] >= 2000 && empty($order['name']))
+        if ($order['amount'] >= 200000 && empty($order['name']))
             die("单笔金额大于两千，请填写用户姓名");
             
         $params = array(
